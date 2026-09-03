@@ -1,0 +1,2600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>⚡ MECHA OS • S2-R2-D2 Mission Control</title>
+  <style>
+    :root {
+      --bg: #07090e;
+      --card-bg: rgba(18, 24, 38, 0.88);
+      --card-border: rgba(0, 242, 254, 0.25);
+      --neon-cyan: #00f2fe;
+      --neon-purple: #9d4edd;
+      --neon-green: #00f5d4;
+      --neon-amber: #ffbe0b;
+      --danger: #ff0055;
+      --warning: #ffb703;
+      --text: #ffffff;
+      --subtext: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(157, 78, 221, 0.2), transparent 60%),
+        radial-gradient(circle at 100% 100%, rgba(0, 242, 254, 0.12), transparent 50%),
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 30px 30px, 30px 30px;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 12px 12px 28px 12px;
+      overflow-x: hidden;
+    }
+
+    header {
+      width: 100%;
+      max-width: 450px;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    .badge-pilot {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0, 242, 254, 0.1);
+      border: 1px solid rgba(0, 242, 254, 0.4);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--neon-cyan);
+      margin-bottom: 4px;
+      cursor: pointer;
+    }
+
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--neon-cyan);
+      box-shadow: 0 0 8px var(--neon-cyan);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.4; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.3); }
+      100% { opacity: 0.4; transform: scale(0.9); }
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #00f2fe 0%, #4facfe 50%, #9d4edd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-transform: uppercase;
+    }
+
+    .status-panel {
+      width: 100%;
+      max-width: 450px;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 6px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--danger);
+      box-shadow: 0 0 10px var(--danger);
+      transition: all 0.3s ease;
+    }
+
+    .status-indicator.online {
+      background: var(--neon-green);
+      box-shadow: 0 0 14px var(--neon-green);
+    }
+
+    .status-text {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .status-sub {
+      font-size: 0.65rem;
+      color: var(--subtext);
+    }
+
+    .btn-connect {
+      background: linear-gradient(135deg, var(--neon-cyan), #00c6ff);
+      color: #07090e;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-weight: 800;
+      font-size: 0.78rem;
+      cursor: pointer;
+      box-shadow: 0 0 18px rgba(0, 242, 254, 0.3);
+      transition: transform 0.1s;
+    }
+
+    .btn-connect:active { transform: scale(0.92); }
+
+    /* COCKPIT WRAPPER & TOOLBOXES */
+    .cockpit-container {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0 auto;
+    }
+
+    .controls-bar {
+      width: 100%;
+      max-width: 480px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .tool-box {
+      background: var(--card-bg);
+      border: 1px solid rgba(0, 242, 254, 0.2);
+      border-radius: 12px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 52px;
+    }
+
+    .active-mission-card {
+      width: 100%;
+      max-width: 480px;
+      background: linear-gradient(135deg, rgba(0,242,254,0.18), rgba(157,78,221,0.25));
+      border: 1.5px solid var(--neon-cyan);
+      border-radius: 14px;
+      padding: 10px 14px;
+      margin-bottom: 10px;
+      box-shadow: 0 0 20px rgba(0,242,254,0.25);
+      animation: pulseMissionCard 2s infinite alternate;
+    }
+
+    .btn-toggle-mini {
+      background: rgba(0, 242, 254, 0.15);
+      border: 1px solid var(--neon-cyan);
+      color: var(--neon-cyan);
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 0.7rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-toggle-mini.active {
+      background: var(--neon-green);
+      color: #000;
+      border-color: var(--neon-green);
+      box-shadow: 0 0 12px var(--neon-green);
+    }
+
+    /* 🌟 THE 4 ASTROMECH COMPANION TABS: 🚀 PILOT • 🛡️ PROTECT • 👁️ DISCOVER • 🎉 CELEBRATE */
+    .studio-tabs {
+      width: 100%;
+      max-width: 450px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 4px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      margin-bottom: 10px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      padding: 8px 2px;
+      border-radius: 10px;
+      color: var(--subtext);
+      font-size: 0.68rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      transition: all 0.15s ease;
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(157, 78, 221, 0.25));
+      border: 1px solid var(--neon-cyan);
+      color: #fff;
+      box-shadow: 0 0 14px rgba(0, 242, 254, 0.3);
+    }
+
+    .tab-pane {
+      width: 100%;
+      max-width: 450px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .tab-pane.active {
+      display: flex;
+    }
+
+    /* 🌊 1. 360° DRIFT PAD */
+    .flow-pad-container {
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      border-radius: 14px;
+      padding: 10px;
+      margin-bottom: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .flow-pad {
+      width: 260px;
+      height: 180px;
+      background: radial-gradient(circle at center, rgba(0, 242, 254, 0.15) 0%, rgba(7, 9, 14, 0.8) 70%);
+      border: 2px dashed rgba(0, 242, 254, 0.4);
+      border-radius: 20px;
+      position: relative;
+      touch-action: none;
+      cursor: crosshair;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .flow-thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--neon-cyan), #00c6ff);
+      box-shadow: 0 0 20px var(--neon-cyan);
+      position: absolute;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      left: 50%;
+      top: 50%;
+      transition: transform 0.05s ease;
+    }
+
+    /* 👁️ SMART CAMERA (FIND & GO) */
+    .cortex-container {
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid rgba(157, 78, 221, 0.5);
+      border-radius: 14px;
+      padding: 12px;
+      margin-bottom: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .cortex-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .armed-badge {
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 10px;
+      background: rgba(0, 245, 212, 0.15);
+      border: 1px solid var(--neon-green);
+      color: var(--neon-green);
+    }
+
+    .armed-badge.unarmed {
+      background: rgba(255, 0, 85, 0.15);
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    .video-viewport {
+      width: 100%;
+      height: 180px;
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .hud-target-reticle {
+      position: absolute;
+      width: 86px;
+      height: 86px;
+      border: 2px dashed var(--neon-cyan);
+      border-radius: 10px;
+      display: none;
+      pointer-events: none;
+      box-shadow: 0 0 16px var(--neon-cyan), inset 0 0 12px rgba(0, 242, 254, 0.4);
+      animation: targetPulse 1.2s infinite ease-in-out;
+      transform: translate(-50%, -50%);
+      left: 50%;
+      top: 50%;
+    }
+
+    .hud-target-reticle::before {
+      content: "🎯 TARGET LOCKED";
+      position: absolute;
+      top: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.55rem;
+      font-weight: 800;
+      color: var(--neon-cyan);
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid rgba(0, 242, 254, 0.4);
+      padding: 1px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    @keyframes targetPulse {
+      0% { opacity: 0.7; transform: translate(-50%, -50%) scale(0.95); }
+      50% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+      100% { opacity: 0.7; transform: translate(-50%, -50%) scale(0.95); }
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* 📊 LIVE OBJECT TELEMETRY HUD */
+    .ai-telemetry-box {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid var(--neon-cyan);
+      box-shadow: 0 0 14px rgba(0, 242, 254, 0.2);
+      border-radius: 10px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .ai-stat-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.72rem;
+    }
+
+    .ai-stat-label { color: var(--subtext); }
+    .ai-stat-val { font-weight: 800; color: var(--neon-cyan); }
+
+    .cortex-controls {
+      display: flex;
+      gap: 6px;
+      width: 100%;
+      margin-top: 2px;
+    }
+
+    .cortex-input {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(157, 78, 221, 0.4);
+      border-radius: 8px;
+      padding: 6px 10px;
+      color: var(--text);
+      font-weight: 700;
+      font-size: 0.75rem;
+    }
+
+    /* OUTCOME-DRIVEN FEATURE CARDS */
+    .feature-card {
+      width: 100%;
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .feature-card:active {
+      transform: scale(0.97);
+      border-color: var(--neon-cyan);
+      box-shadow: 0 0 16px rgba(0, 242, 254, 0.3);
+    }
+
+    .card-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-icon { font-size: 1.6rem; }
+    .card-title { font-size: 0.84rem; font-weight: 800; color: #fff; }
+    .card-desc  { font-size: 0.68rem; color: var(--subtext); }
+
+    .btn-card-action {
+      background: rgba(0, 242, 254, 0.15);
+      border: 1px solid var(--neon-cyan);
+      color: var(--neon-cyan);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.72rem;
+      font-weight: 800;
+    }
+
+    /* 🕵️ SECRET SPY BROADCASTER (100% FUNCTIONAL) */
+    .spy-broadcaster {
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid rgba(157, 78, 221, 0.4);
+      border-radius: 14px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .spy-presets {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      width: 100%;
+    }
+
+    .btn-spy-preset {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      padding: 6px 2px;
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    /* 8X8 DROID FACE CANVAS */
+    .pixel-pad-container {
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid rgba(0, 242, 254, 0.25);
+      border-radius: 14px;
+      padding: 10px;
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pixel-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 28px);
+      grid-template-rows: repeat(8, 28px);
+      gap: 4px;
+      touch-action: none;
+    }
+
+    .pixel-cell {
+      width: 28px;
+      height: 28px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .pixel-cell.active {
+      background: var(--neon-cyan);
+      box-shadow: 0 0 10px var(--neon-cyan);
+    }
+
+    .jukebox-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      width: 100%;
+      margin: 6px 0;
+    }
+
+    .btn-song {
+      background: var(--card-bg);
+      border: 1px solid rgba(157, 78, 221, 0.4);
+      padding: 8px 4px;
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.1s;
+    }
+
+    .mission-active-card {
+      border: 1.5px solid var(--neon-green) !important;
+      background: rgba(0, 245, 212, 0.12) !important;
+      box-shadow: 0 0 16px rgba(0, 245, 212, 0.35) !important;
+      animation: pulseMissionCard 1.8s infinite alternate !important;
+    }
+
+    @keyframes pulseMissionCard {
+      0% { box-shadow: 0 0 8px rgba(0, 245, 212, 0.2); }
+      100% { box-shadow: 0 0 22px rgba(0, 245, 212, 0.55); border-color: var(--neon-cyan); }
+    }
+
+    .hud-log {
+      margin-top: 10px;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+      color: var(--neon-green);
+      text-align: center;
+      letter-spacing: 0.5px;
+      padding: 4px;
+    }
+  </style>
+  <script src="services/cortex_api.js"></script>
+</head>
+<body>
+  <div class="cockpit-container">
+
+  <header>
+    <div style="display:flex; justify-content:space-between; align-items:center; width:100%; gap:6px;">
+      <div class="badge-pilot" onclick="customizePilotName()">
+        <div class="pulse-dot"></div>
+        Pilot: <span id="pilotCallsignLabel">Pilot</span> • Droid: S2-R2-D2 ✏️
+      </div>
+      <div class="badge-pilot" id="weatherTimeWidget" style="background:rgba(0, 242, 254, 0.12); border:1px solid rgba(0,242,254,0.4); color:var(--neon-cyan); cursor:pointer; font-weight:700;" onclick="showTimeOnRobotFace()" title="Tap to display current time on S2-R2-D2's face">
+        ⏱️ <span id="headerTime">--:--</span> • <span id="headerWeather">--°C</span> ⚡
+      </div>
+    </div>
+    <h1>⚡ MECHA OS • S2-R2-D2 ⚡</h1>
+
+    <div class="status-panel">
+      <div class="status-left">
+        <div class="status-indicator" id="btDot"></div>
+        <div>
+          <div class="status-text" id="btStatus">Droid Offline</div>
+          <div class="status-sub" id="statusSubLabel">Astromech Droid Companion</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <button class="btn-connect" id="btnConnect" onclick="connectBluetooth()">Link Droid</button>
+        <button class="btn-toggle-mini" id="btnConnectUsb" style="background:rgba(0, 242, 254, 0.15); border-color:var(--neon-cyan); color:var(--neon-cyan); font-weight:800; padding:8px 10px; height:100%; border-radius:10px;" onclick="connectUsbSerial()" title="Direct USB Cable Tether">🔌 USB</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- QUICK CONTROLS -->
+  <div class="controls-bar" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;">
+    <div class="tool-box">
+      <div>
+        <div style="font-size:0.75rem; font-weight:800;">🔊 Droid Voice</div>
+        <div style="font-size:0.56rem; color:var(--subtext);" id="muteStatusText">Sound On</div>
+      </div>
+      <button class="btn-toggle-mini active" id="btnMute" onclick="toggleMasterAudio()">SOUND</button>
+    </div>
+
+    <div class="tool-box" style="border-color:rgba(0, 242, 254, 0.4); background:rgba(0, 242, 254, 0.05); cursor:pointer;" onclick="toggleHourlyChime()">
+      <div>
+        <div style="font-size:0.75rem; font-weight:800; color:var(--neon-cyan);">🔔 Hourly Chime</div>
+        <div style="font-size:0.56rem; color:var(--neon-green);" id="chimeSubText">Every :00</div>
+      </div>
+      <button class="btn-toggle-mini active" id="btnChimeToggle" onclick="event.stopPropagation(); toggleHourlyChime()">CHIME</button>
+    </div>
+
+    <div class="tool-box">
+      <div>
+        <div style="font-size:0.75rem; font-weight:800;">📱 Tilt Steer</div>
+        <div style="font-size:0.56rem; color:var(--subtext);">Motion Drive</div>
+      </div>
+      <button class="btn-toggle-mini" id="btnGyro" onclick="toggleGyroControl()">OFF</button>
+    </div>
+  </div>
+
+  <!-- 🛡️ REAL-TIME ACTIVE AUTONOMOUS MISSION HUD -->
+  <div id="activeMissionHud" class="active-mission-card" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; width:100%; gap:8px;">
+      <div style="display:flex; align-items:flex-start; gap:8px; flex:1;">
+        <div class="pulse-dot" style="background:var(--neon-green); width:10px; height:10px; margin-top:4px; flex-shrink:0;"></div>
+        <div>
+          <div style="font-size:0.58rem; color:var(--neon-cyan); font-weight:800; letter-spacing:1px;">ACTIVE AUTONOMOUS MISSION</div>
+          <div style="font-size:0.92rem; font-weight:900; color:#fff;" id="activeMissionTitle">The King's Second</div>
+          <div style="font-size:0.62rem; color:var(--neon-green); margin-top:2px;" id="activeMissionDetail">👁️ Ultrasonic Radar Scanning • Tracking Pilot Stride (18-80cm)</div>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0;">
+        <button class="btn-toggle-mini" style="background:rgba(255,0,85,0.25); border-color:var(--danger); color:var(--danger); font-weight:800; padding:6px 12px;" onclick="cancelActiveMission()">🛑 STAND DOWN</button>
+        <div style="font-size:0.75rem; font-weight:800; color:var(--neon-amber); font-family:monospace;" id="activeMissionTimer">⏱️ 00:00</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🌟 THE 4 ASTROMECH COMPANION TABS: 🚀 PILOT • 🛡️ PROTECT • 👁️ DISCOVER • 🎉 CELEBRATE -->
+  <div class="studio-tabs">
+    <button class="tab-btn active" id="tabBtn1" onclick="switchTab(1)">
+      <span>🚀 PILOT</span>
+      <span style="font-size:0.58rem;">Drive & Face</span>
+    </button>
+    <button class="tab-btn" id="tabBtn2" onclick="switchTab(2)">
+      <span>🛡️ PROTECT</span>
+      <span style="font-size:0.58rem;">Sentry & Patrol</span>
+    </button>
+    <button class="tab-btn" id="tabBtn3" onclick="switchTab(3)">
+      <span>👁️ DISCOVER</span>
+      <span style="font-size:0.58rem;">Vision AI & 4K</span>
+    </button>
+    <button class="tab-btn" id="tabBtn4" onclick="switchTab(4)">
+      <span>🎉 CELEBRATE</span>
+      <span style="font-size:0.58rem;">Games & Music</span>
+    </button>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 1: 🚀 PILOT (Manual Flight, Drift, Transmission & Face Drawing)  -->
+  <!-- ===================================================================== -->
+  <div class="tab-pane active" id="tabPane1">
+    <!-- 🌊 360° DRIFT PAD -->
+    <div class="flow-pad-container">
+      <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+        <span style="font-size:0.75rem; font-weight:800; color:var(--neon-cyan);">🌊 360° DRIFT PAD</span>
+        <span id="flowVectorLabel" style="font-size:0.65rem; font-weight:700; color:var(--neon-cyan);">Center [0, 0]</span>
+      </div>
+      <div class="flow-pad" id="flowPad">
+        <div class="flow-thumb" id="flowThumb"></div>
+      </div>
+      <div style="font-size:0.6rem; color:var(--subtext); text-align:center;">Slide your thumb smoothly to steer and drift in any direction!</div>
+    </div>
+
+    <!-- ⚡ REAL-TIME SPEED THROTTLE SLIDER & TRANSMISSION -->
+    <div style="width:100%; background:var(--card-bg); border:1px solid rgba(0,242,254,0.3); border-radius:12px; padding:8px 12px; margin-bottom:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <span style="font-size:0.75rem; font-weight:800; color:var(--neon-cyan);">⚡ SPEED THROTTLE</span>
+        <span id="speedSliderLabel" style="font-size:0.68rem; font-weight:800; color:var(--neon-green);">55% • 🚗 Balanced Cruise</span>
+      </div>
+      <input type="range" min="30" max="100" value="55" id="speedSlider" style="width:100%; accent-color:var(--neon-cyan); cursor:pointer;" oninput="onSpeedSliderChange(this.value)">
+      <div style="width:100%; display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:6px;">
+        <button class="btn-toggle-mini" id="gear1" onclick="shiftGear(1, 'q')">♟️ Classical (38%)</button>
+        <button class="btn-toggle-mini active" id="gear2" onclick="shiftGear(2, 'w')">⏱️ Rapid (65%)</button>
+        <button class="btn-toggle-mini" id="gear3" onclick="shiftGear(3, 'e')">⚡ Blitz (100%)</button>
+      </div>
+    </div>
+
+    <!-- 📯 HORN, KNIGHT'S L-MOVE & BRAKE -->
+    <div style="width:100%; display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:8px;">
+      <button class="btn-toggle-mini" style="border-color:var(--neon-amber); color:var(--neon-amber); padding:8px 0; font-size:0.7rem;" onclick="honkHorn()">📯 HORN</button>
+      <button class="btn-toggle-mini" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:8px 0; font-size:0.7rem;" onclick="triggerKnightLMove()">♞ L-MOVE</button>
+      <button class="btn-toggle-mini" style="border-color:var(--danger); color:var(--danger); padding:8px 0; font-size:0.7rem;" onclick="emergencyStop()">🛑 BRAKE</button>
+    </div>
+
+    <!-- 🎨 DRAW ON DROID FACE -->
+    <div class="pixel-matrix-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <span style="font-size:0.75rem; font-weight:800; color:var(--neon-green);">🎨 DRAW ON DROID FACE</span>
+        <button class="btn-toggle-mini" style="font-size:0.6rem; padding:3px 8px;" onclick="clearPixelPad()">CLEAR</button>
+      </div>
+      <div class="pixel-grid" id="pixelGrid"></div>
+      <div style="font-size:0.58rem; color:var(--subtext); text-align:center; margin-top:4px;">Tap squares to light up LEDs on S2-R2-D2's face in real-time!</div>
+    </div>
+
+    <!-- 🎭 ANIMATED EXPRESSIONS -->
+    <div class="feature-card" onclick="triggerMode('4', '🎭 Animated Expressions: Glowing smiles & winks!')">
+      <div class="card-left">
+        <div class="card-icon">🎭</div>
+        <div>
+          <div class="card-title">Animated Face Expressions</div>
+          <div class="card-desc">Cycles glowing animated expressions: Winking 😉, Hearts ❤️ & Smiles 😊!</div>
+        </div>
+      </div>
+      <div class="btn-card-action">SHOW</div>
+    </div>
+
+    <!-- 👑 ROYAL CORONATION SALUTE (GREET KING SHIVANSH) -->
+    <div class="feature-card" style="border:1px solid rgba(255, 190, 11, 0.45); background:rgba(255, 190, 11, 0.08);" onclick="triggerRoyalSalute()">
+      <div class="card-left">
+        <div class="card-icon">👑</div>
+        <div>
+          <div class="card-title" style="color:var(--neon-amber);">Royal Coronation Salute</div>
+          <div class="card-desc">Star Wars Throne Room Anthem • Linear bow • Scrolls "KING SHIVANSH" across face!</div>
+        </div>
+      </div>
+      <div class="btn-card-action" style="border-color:var(--neon-amber); color:var(--neon-amber); background:rgba(255, 190, 11, 0.15);">GREET 👑</div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 2: 🛡️ PROTECT (Autonomous Jobs & Sentries — S2-R2-D2 Works For You) -->
+  <!-- ===================================================================== -->
+  <div class="tab-pane" id="tabPane2">
+    <!-- 📊 CENTIPAWN SECURITY EVALUATION BAR -->
+    <div style="width:100%; background:var(--card-bg); border:1px solid rgba(0, 245, 212, 0.35); border-radius:12px; padding:8px 12px; margin-bottom:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <span style="font-size:0.72rem; font-weight:800; color:var(--neon-green);">📊 CENTIPAWN SECURITY EVAL</span>
+        <span id="centipawnLabel" style="font-size:0.68rem; font-weight:800; color:var(--neon-cyan);">+5.00 • 🛡️ Position Fortified</span>
+      </div>
+      <div style="width:100%; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden; display:flex;">
+        <div id="centipawnBar" style="width:90%; height:100%; background:linear-gradient(90deg, var(--neon-cyan), var(--neon-green)); transition:width 0.4s ease;"></div>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:0.55rem; color:var(--subtext); margin-top:3px;">
+        <span>-5.00 (Breached)</span>
+        <span>0.00 (Contested)</span>
+        <span>+5.00 (Impenetrable)</span>
+      </div>
+    </div>
+
+    <!-- ⚡ AUTONOMOUS PATROL SPEED CONTROLLER -->
+    <div style="width:100%; background:var(--card-bg); border:1px solid rgba(0,242,254,0.3); border-radius:12px; padding:8px 12px; margin-bottom:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <span style="font-size:0.75rem; font-weight:800; color:var(--neon-cyan);">⚡ PATROL SPEED</span>
+        <span id="speedSliderLabel2" style="font-size:0.68rem; font-weight:800; color:var(--neon-green);">55% • ⏱️ Rapid Cruise</span>
+      </div>
+      <input type="range" min="30" max="100" value="55" id="speedSlider2" style="width:100%; accent-color:var(--neon-cyan); cursor:pointer;" oninput="onSpeedSliderChange(this.value)">
+      <div style="display:flex; justify-content:space-between; font-size:0.58rem; color:var(--subtext); margin-top:2px;">
+        <span>♟️ 38% (Classical)</span>
+        <span>⏱️ 65% (Rapid)</span>
+        <span>⚡ 100% (Blitz)</span>
+      </div>
+    </div>
+    <!-- 📋 AUTONOMOUS SHIFT LOG (REAL-TIME METRICS) -->
+    <div style="width:100%; background:rgba(0, 245, 212, 0.06); border:1px solid rgba(0, 245, 212, 0.25); border-radius:12px; padding:8px 12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <div style="font-size:0.62rem; color:var(--subtext);">AUTONOMOUS SENTRY STATUS</div>
+        <div style="font-size:0.75rem; font-weight:800; color:var(--neon-green);" id="sentryStatusMetric">🟢 SENTRY READY</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:0.62rem; color:var(--subtext);">SESSION STATS</div>
+        <div style="font-size:0.75rem; font-weight:800; color:var(--text);"><span id="metricCliffSaves">0</span> Saves • <span id="metricPatrolTime">0m</span> On Duty</div>
+      </div>
+    </div>
+
+    <!-- ♟️ THE KING'S SECOND (GRANDMASTER ESCORT) -->
+    <div class="feature-card" data-mode="5" onclick="triggerMode('5', '♟️ The King\'s Second Active: S2-R2-D2 is advancing with King Shivansh!')">
+      <div class="card-left">
+        <div class="card-icon">♟️</div>
+        <div>
+          <div class="card-title">The King's Second</div>
+          <div class="card-desc">Your Grandmaster Second — tracks your stride with tactical precision, sweeps flanks on turns, and guards your perimeter!</div>
+        </div>
+      </div>
+      <div class="btn-card-action">ENGAGE</div>
+    </div>
+
+    <!-- 🚪 THE SICILIAN FORTRESS (DOOR GUARD) -->
+    <div class="feature-card" data-mode="9" onclick="triggerMode('9', '🚪 The Sicilian Fortress Active: Counting visitors!')">
+      <div class="card-left">
+        <div class="card-icon">🚪</div>
+        <div>
+          <div class="card-title">The Sicilian Fortress (Door Guard)</div>
+          <div class="card-desc">Stationary entrance defense — greets arriving guests and counts everyone who walks in!</div>
+        </div>
+      </div>
+      <div class="btn-card-action">FORTIFY</div>
+    </div>
+
+    <!-- 🌙 KING'S INDIAN PERIMETER (NIGHT SENTRY) -->
+    <div class="feature-card" data-mode="6" onclick="triggerMode('6', '🌙 King\'s Indian Perimeter Armed!')">
+      <div class="card-left">
+        <div class="card-icon">🌙</div>
+        <div>
+          <div class="card-title">King's Indian Perimeter (Night Sentry)</div>
+          <div class="card-desc">Silent dark perimeter trap. Flashes lights & sounds alarm siren if someone sneaks near!</div>
+        </div>
+      </div>
+      <div class="btn-card-action">ARM SENTRY</div>
+    </div>
+
+    <!-- ☕ DESK COMPANION PATROL -->
+    <div class="feature-card" data-mode="7" onclick="triggerMode('7', '☕ Desk Companion: Roaming your desk safely!')">
+      <div class="card-left">
+        <div class="card-icon">☕</div>
+        <div>
+          <div class="card-title">Desk Companion Patrol</div>
+          <div class="card-desc">Roams your desk while you work — stops safely before edges with a relieved sigh!</div>
+        </div>
+      </div>
+      <div class="btn-card-action">PATROL</div>
+    </div>
+
+    <!-- 🧭 ENDGAME SCOUT (FULL ROOM EXPLORATION) -->
+    <div class="feature-card" data-mode="1" onclick="triggerMode('1', '🧭 Room Scout Engaged: Autonomous exploration!')">
+      <div class="card-left">
+        <div class="card-icon">🧭</div>
+        <div>
+          <div class="card-title">Endgame Scout (Room Explorer)</div>
+          <div class="card-desc">Explores entire room safely with curious pathfinding chatter, avoiding chairs & walls!</div>
+        </div>
+      </div>
+      <div class="btn-card-action">SCOUT</div>
+    </div>
+
+    <!-- 🏁 QUEEN'S GAMBIT COURIER (LINE TRACKING) -->
+    <div class="feature-card" data-mode="2" onclick="triggerMode('2', '🏁 Queen\'s Gambit Courier Active: Following floor track!')">
+      <div class="card-left">
+        <div class="card-icon">🏁</div>
+        <div>
+          <div class="card-title">Queen's Gambit Courier</div>
+          <div class="card-desc">Autonomous floor track navigation — follows black tape tracks with precision line guidance!</div>
+        </div>
+      </div>
+      <div class="btn-card-action">TRACK</div>
+    </div>
+
+    <!-- ⌛ GRANDMASTER POMODORO FOCUS SENTRY -->
+    <div class="feature-card" data-mode="P" onclick="togglePomodoroSentry()">
+      <div class="card-left">
+        <div class="card-icon">⌛</div>
+        <div>
+          <div class="card-title">Grandmaster Focus Sentry (25m)</div>
+          <div class="card-desc">Desktop deep work timer: Quiet hourglass on face, biological respiration, and break celebrations!</div>
+        </div>
+      </div>
+      <div class="btn-card-action" id="btnPomodoroAction">FOCUS</div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 3: 👁️ DISCOVER (100% Pure Gemini Spatial Vision & 4K POV)         -->
+  <!-- ===================================================================== -->
+  <div class="tab-pane" id="tabPane3">
+    <!-- 👁️ SMART CAMERA (FIND & GO) -->
+    <div class="cortex-container">
+      <div class="cortex-header-row">
+        <span style="font-size:0.75rem; font-weight:800; color:var(--neon-purple);">👁️ SMART CAMERA & CHESS ARBITER</span>
+        <div style="display:flex; gap:4px; align-items:center;">
+          <span class="armed-badge" id="cortexBadge">🟢 READY</span>
+          <button class="btn-toggle-mini" style="font-size:0.62rem; padding:4px 8px;" onclick="cycleVideoInput()">🔄 CAM</button>
+          <button class="btn-toggle-mini" style="font-size:0.62rem; padding:4px 8px; border-color:var(--neon-amber); color:var(--neon-amber);" onclick="toggleQuikScreenCapture()">📺 GOPRO</button>
+        </div>
+      </div>
+
+      <!-- CAMERA / USB WEBCAM VIEWPORT -->
+      <div class="video-viewport" id="videoViewport">
+        <video id="cameraStream" autoplay playsinline style="display:none;"></video>
+        <div class="hud-target-reticle" id="targetReticle"></div>
+        <span id="cameraPlaceholder" style="font-size:0.7rem; color:var(--subtext); text-align:center; padding:10px;">
+          Tap <b>"🔄 CAM"</b> for Camera/Webcam<br>or <b>"📺 GOPRO"</b> for GoPro Live Stream!
+        </span>
+      </div>
+
+      <!-- 📊 LIVE OBJECT TELEMETRY HUD -->
+      <div class="ai-telemetry-box" id="aiTelemetryBox">
+        <div class="ai-stat-row">
+          <span class="ai-stat-label">🎯 Target / Move:</span>
+          <span class="ai-stat-val" id="aiStatTarget">Ready for Snapshot</span>
+        </div>
+        <div class="ai-stat-row">
+          <span class="ai-stat-label">📏 Range / Eval:</span>
+          <span class="ai-stat-val" id="aiStatDist">--</span>
+        </div>
+        <div class="ai-stat-row">
+          <span class="ai-stat-label">👁️ Grandmaster Observation:</span>
+          <span class="ai-stat-val" style="color:#fff; font-weight:400; font-size:0.68rem;" id="aiStatReason">Tap 'SCAN CHESSBOARD' or type target below!</span>
+        </div>
+      </div>
+
+      <!-- INPUT & CHESS CONTROLS -->
+      <div class="cortex-controls" style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+        <button class="btn-toggle-mini" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:8px 0;" onclick="executeRealGeminiVisionGoal()">🎯 FIND & DRIVE</button>
+        <button class="btn-toggle-mini" style="border-color:var(--neon-green); color:var(--neon-green); padding:8px 0;" onclick="analyzePhysicalChessboard()">♟️ SCAN CHESSBOARD</button>
+      </div>
+      <input type="text" class="cortex-input" id="aiGoalInput" placeholder="Type target to find (e.g. 'Find my mug', 'Find blue keys')">
+
+      <!-- 👑 ROYAL ASTROMECH EXECUTIVE BRIEFING & VOCAL CORTEX -->
+      <div style="background:var(--card-bg); border:1.5px solid rgba(255, 190, 11, 0.4); border-radius:14px; padding:10px 12px; margin-top:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span style="font-size:0.75rem; font-weight:800; color:var(--neon-amber);">👑 ROYAL EXECUTIVE BRIEFING</span>
+          <button class="btn-toggle-mini" style="border-color:var(--neon-amber); color:var(--neon-amber); font-size:0.62rem; padding:4px 10px; background:rgba(255,190,11,0.15);" onclick="triggerRoyalBriefing()">⚡ RUN BRIEFING</button>
+        </div>
+        <div style="font-size:0.62rem; color:var(--subtext); margin-bottom:6px;" id="briefingStatusText">S2-R2-D2 queries live weather & time, speaks your tactical debrief, and animates its face!</div>
+        
+        <!-- 🎙️ VOCAL GEMINI CORTEX ("ASK S2-R2-D2 ANYTHING") -->
+        <div style="display:flex; gap:6px; width:100%; margin-top:4px;">
+          <input type="text" class="cortex-input" id="askGeminiInput" placeholder="Ask S2-R2-D2 anything (e.g. 'Chess advice', 'Weather outlook')">
+          <button class="btn-toggle-mini" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:0 12px;" onclick="askGeminiVocalBrain()">ASK 🧠</button>
+          <button class="btn-toggle-mini" style="border-color:var(--neon-green); color:var(--neon-green); padding:0 10px;" onclick="listenVoiceToAskGemini()">🎙️</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 4: 🎉 CELEBRATE (Dances, Party Games, Voice, Air Music & Jukebox) -->
+  <!-- ===================================================================== -->
+  <div class="tab-pane" id="tabPane4">
+    <!-- 👑 ROYAL CORONATION SALUTE (GREET KING SHIVANSH) -->
+    <div class="feature-card" style="border:1px solid rgba(255, 190, 11, 0.45); background:rgba(255, 190, 11, 0.08);" onclick="triggerRoyalSalute()">
+      <div class="card-left">
+        <div class="card-icon">👑</div>
+        <div>
+          <div class="card-title" style="color:var(--neon-amber);">Royal Coronation Salute</div>
+          <div class="card-desc">Star Wars Throne Room Anthem • Linear bow • Scrolls "KING SHIVANSH" across face!</div>
+        </div>
+      </div>
+      <div class="btn-card-action" style="border-color:var(--neon-amber); color:var(--neon-amber); background:rgba(255, 190, 11, 0.15);">GREET 👑</div>
+    </div>
+
+    <!-- 🎭 ASTROMECH EMOTION & SENTIENCE STUDIO -->
+    <div style="background:var(--card-bg); border:1px solid rgba(157, 78, 221, 0.4); border-radius:14px; padding:10px 12px; margin-bottom:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <span style="font-size:0.75rem; font-weight:800; color:var(--neon-purple);">🎭 ASTROMECH EMOTIONS</span>
+        <span style="font-size:0.6rem; color:var(--neon-cyan);">Interactive Sentience</span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+        <button class="btn-toggle-mini" style="border-color:var(--neon-amber); color:var(--neon-amber); padding:8px 0; font-size:0.7rem;" onclick="triggerMood('Y', '🌟 Astromech Bliss & Ecstasy Arpeggio!')">🌟 ECSTASY</button>
+        <button class="btn-toggle-mini" style="border-color:var(--neon-green); color:var(--neon-green); padding:8px 0; font-size:0.7rem;" onclick="triggerMood('A', '✅ R2-D2 Excited Affirmative Yes!')">✅ SAY YES</button>
+        <button class="btn-toggle-mini" style="border-color:var(--danger); color:var(--danger); padding:8px 0; font-size:0.7rem;" onclick="triggerMood('D', '😠 Irritated Grumpy Mechanical Grunt!')">😠 GRUMPY</button>
+        <button class="btn-toggle-mini" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:8px 0; font-size:0.7rem;" onclick="triggerMood('C', '😴 Drowsy Fatigued Power-down Sigh...')">😴 FATIGUED</button>
+      </div>
+    </div>
+
+    <!-- 💃 360° VICTORY CELEBRATION DANCE -->
+    <div class="feature-card" onclick="playVictoryDance()">
+      <div class="card-left">
+        <div class="card-icon">💃</div>
+        <div>
+          <div class="card-title">360° Victory Celebration Dance</div>
+          <div class="card-desc">Spins a 360° celebration pirouette with happy victory chimes on S2-R2-D2!</div>
+        </div>
+      </div>
+      <div class="btn-card-action">DANCE!</div>
+    </div>
+
+    <!-- 🎯 PARTY SPINNER ROULETTE -->
+    <div class="feature-card" onclick="playPartySpin()">
+      <div class="card-left">
+        <div class="card-icon">🎯</div>
+        <div>
+          <div class="card-title">Party Spinner</div>
+          <div class="card-desc">Spins fast and randomly points to a friend in the circle!</div>
+        </div>
+      </div>
+      <div class="btn-card-action">SPIN!</div>
+    </div>
+
+    <!-- 📻 THE GRANDMASTER MORSE CODE ACADEMY (INTERACTIVE LEARNING & PAIRING GAME) -->
+    <div class="spy-broadcaster" style="border:1.5px solid rgba(157, 78, 221, 0.45); background:linear-gradient(135deg, rgba(20,10,35,0.85), rgba(10,20,35,0.85)); padding:12px; border-radius:14px; margin-bottom:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <span style="font-size:0.75rem; font-weight:800; color:var(--neon-purple);">📻 MORSE CODE ACADEMY</span>
+        <span style="font-size:0.62rem; color:var(--neon-green); font-weight:800;" id="morseScoreLabel">⭐ Score: 0 • Cadet</span>
+      </div>
+      <div style="font-size:0.6rem; color:var(--subtext); margin-bottom:8px;">S2-R2-D2 pairs with King Shivansh to teach, test & transmit secret telegraph codes!</div>
+
+      <!-- 🎮 1. INTERACTIVE LISTENING QUIZ -->
+      <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(0,242,254,0.25); border-radius:10px; padding:8px 10px; margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <span style="font-size:0.68rem; font-weight:800; color:var(--neon-cyan);">🎧 EAR TRAINING: GUESS THE CODE</span>
+          <button class="btn-toggle-mini" style="font-size:0.6rem; padding:4px 10px; background:rgba(0,242,254,0.2); border-color:var(--neon-cyan);" onclick="playMorseQuizRound()">🔊 PLAY SECRET CODE</button>
+        </div>
+        <div style="font-size:0.62rem; color:var(--neon-amber); text-align:center; margin-bottom:6px;" id="morseQuizHint">Tap 'PLAY SECRET CODE' — S2-R2-D2 will beep & blink a letter!</div>
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;" id="morseQuizOptions">
+          <button class="btn-spy-preset" onclick="checkMorseAnswer('E')">E (•)</button>
+          <button class="btn-spy-preset" onclick="checkMorseAnswer('T')">T (—)</button>
+          <button class="btn-spy-preset" onclick="checkMorseAnswer('S')">S (•••)</button>
+          <button class="btn-spy-preset" onclick="checkMorseAnswer('O')">O (———)</button>
+        </div>
+      </div>
+
+      <!-- 🔘 2. TACTILE TELEGRAPH KEY (TAP YOUR OWN CODE) -->
+      <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(0,245,212,0.25); border-radius:10px; padding:8px 10px; margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <span style="font-size:0.68rem; font-weight:800; color:var(--neon-green);">🔘 TELEGRAPH TAP KEY</span>
+          <span style="font-size:0.62rem; color:var(--neon-cyan); font-weight:700;" id="telegraphDecoded">Decoded: --</span>
+        </div>
+        <button class="btn-connect" id="btnTelegraphKey" style="width:100%; height:44px; background:linear-gradient(135deg, rgba(0,245,212,0.15), rgba(0,242,254,0.25)); border-color:var(--neon-green); font-size:0.75rem; font-weight:800; letter-spacing:0.5px; user-select:none;" onpointerdown="onTelegraphDown()" onpointerup="onTelegraphUp()">🔘 HOLD / TAP TELEGRAPH KEY</button>
+      </div>
+
+      <!-- 🕵️ 3. SECRET BROADCASTER -->
+      <div style="display:flex; gap:6px; width:100%; margin-bottom:6px;">
+        <input type="text" class="cortex-input" id="spyMsgInput" placeholder="Type secret word (e.g. 'SOS', 'KING')">
+        <button class="btn-toggle-mini" onclick="transmitCustomSpyMessage()">BEEP</button>
+      </div>
+
+      <div class="spy-presets">
+        <button class="btn-spy-preset" onclick="sendPresetSpyMsg('SOS')">🆘 SOS</button>
+        <button class="btn-spy-preset" onclick="sendPresetSpyMsg('R2D2')">🛸 R2-D2</button>
+        <button class="btn-spy-preset" onclick="sendPresetSpyMsg('KING')">👑 KING</button>
+        <button class="btn-spy-preset" onclick="sendPresetSpyMsg('HELLO')">👋 HELLO</button>
+      </div>
+    </div>
+
+    <!-- 🎙️ WHISPER & SHOUT VOICE DRIVE -->
+    <div class="feature-card" onclick="startAudioVlaVoice()">
+      <div class="card-left">
+        <div class="card-icon">🎙️</div>
+        <div>
+          <div class="card-title">Whisper & Shout Drive</div>
+          <div class="card-desc">Whisper for stealth crawling • Shout for turbo boost!</div>
+        </div>
+      </div>
+      <div class="btn-card-action">LISTEN</div>
+    </div>
+
+    <!-- 🎵 AIR MUSIC THEREMIN -->
+    <div class="feature-card" onclick="triggerMode('8', '🎵 Air Music Active: Wave your hands to play!')">
+      <div class="card-left">
+        <div class="card-icon">🎵</div>
+        <div>
+          <div class="card-title">Air Music (No Touch)</div>
+          <div class="card-desc">Wave your hands in the air: Left hand changes pitch, right hand beat!</div>
+        </div>
+      </div>
+      <div class="btn-card-action">PLAY</div>
+    </div>
+
+    <!-- 🎶 MUSIC JUKEBOX -->
+    <div class="jukebox-grid">
+      <button class="btn-song" onclick="playSong('J1', '🌌 Star Wars')">🌌 Star Wars</button>
+      <button class="btn-song" onclick="playSong('J2', '🤖 R2 Chirp')">🤖 R2 Chirp</button>
+      <button class="btn-song" onclick="playSong('J3', '🍄 Mario')">🍄 Mario</button>
+      <button class="btn-song" onclick="playSong('J4', '🕶️ Spy Theme')">🕶️ Spy Theme</button>
+    </div>
+  </div>
+
+  <div class="hud-log" id="hudLog">[READY] Tap "Link Droid" to take control • S2-R2-D2 Vocalized</div>
+  </div> <!-- /cockpit-container -->
+
+  <script>
+    // 🛡️ GLOBAL COCKPIT ERROR HANDLER (Surfaces any runtime syntax/reference bug immediately to HUD)
+    window.onerror = function(msg, url, line) {
+      console.error("[Cockpit Error]", msg, "at line", line);
+      const hud = document.getElementById("hudLog");
+      if (hud) hud.innerText = `[ERROR: L${line}] ${msg}`;
+    };
+
+    const SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
+    const CHAR_UUID    = "0000ffe1-0000-1000-8000-00805f9b34fb";
+
+    let bluetoothDevice = null;
+    let rxTxChar = null;
+    let currentGearNum = 2;
+    let gyroActive = false;
+    let isMasterMuted = false;
+    let pixelMatrix = Array(8).fill(0).map(() => Array(8).fill(0));
+    let cameraActive = false;
+    let lastFlowCmd = 'S';
+    let gAiVisionAborted = false;
+    let availableVideoDevices = [];
+    let currentDeviceIndex = 0;
+
+    // ------------------------------------------------------------------------
+    // TOP-LEVEL IMMEDIATE ARMING & CALLSIGN INITIALIZATION
+    // ------------------------------------------------------------------------
+    (function initArmingAndCallsign() {
+      try {
+        const savedName = localStorage.getItem('s2r2d2_pilot_name') || 'Pilot';
+        const label = document.getElementById('pilotCallsignLabel');
+        if (label) label.innerText = savedName;
+        updateCortexBadge();
+      } catch(e) { console.error(e); }
+    })();
+
+    function customizePilotName() {
+      const current = localStorage.getItem('s2r2d2_pilot_name') || 'King Shivansh';
+      const input = prompt("Enter your Pilot Callsign / Name:", current);
+      if (input && input.trim().length > 0) {
+        const clean = input.trim();
+        localStorage.setItem('s2r2d2_pilot_name', clean);
+        document.getElementById('pilotCallsignLabel').innerText = clean;
+        if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+          document.getElementById("btStatus").innerText = `👑 ${clean} • Linked to S2-R2-D2`;
+        }
+      }
+    }
+
+    function promptSetApiKey() {
+      const current = typeof CortexAPI !== 'undefined' 
+        ? CortexAPI.getApiKey() 
+        : (localStorage.getItem('s2r2d2_gemini_api_key') || '');
+      const input = prompt("🔑 Enter your Google Gemini API Key (Stored locally in your browser only):", current);
+      if (input !== null) {
+        const clean = input.trim();
+        if (clean.length > 0) {
+          localStorage.setItem('s2r2d2_gemini_api_key', clean);
+          if (typeof CortexAPI !== 'undefined') CortexAPI.setApiKey(clean);
+          document.getElementById("hudLog").innerText = "[AI BRAIN] 🟢 Gemini Cloud Cortex Armed!";
+        } else {
+          localStorage.removeItem('s2r2d2_gemini_api_key');
+          if (typeof CortexAPI !== 'undefined') CortexAPI.setApiKey('');
+          document.getElementById("hudLog").innerText = "[AI BRAIN] 🟡 Offline Mode Active";
+        }
+        updateCortexBadge();
+      }
+    }
+
+    function updateCortexBadge() {
+      const badge = document.getElementById("cortexBadge");
+      if (badge) {
+        badge.onclick = promptSetApiKey;
+        badge.style.cursor = "pointer";
+        const localKey = localStorage.getItem('s2r2d2_gemini_api_key') || '';
+        const hasKey = typeof CortexAPI !== 'undefined' ? CortexAPI.hasApiKey() : (localKey.length > 10);
+        if (hasKey) {
+          badge.className = "armed-badge";
+          badge.innerText = "🟢 CLOUD AI ARMED";
+          badge.title = "Tap to edit or clear your Gemini API key";
+        } else {
+          badge.className = "armed-badge unarmed";
+          badge.innerText = "🟡 OFFLINE (TAP TO SET KEY)";
+          badge.title = "Tap to configure your Gemini API key";
+        }
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // 📳 SILENT TACTICAL HAPTIC FEEDBACK (ZERO AUDIO CONFLICT)
+    // ------------------------------------------------------------------------
+    function triggerHaptic(type = 'light') {
+      if (navigator.vibrate) {
+        try {
+          if (type === 'light') navigator.vibrate(12);
+          else if (type === 'medium') navigator.vibrate(28);
+          else if (type === 'heavy') navigator.vibrate([35, 30, 35]);
+          else if (type === 'double') navigator.vibrate([15, 25, 15]);
+        } catch(e) {}
+      }
+    }
+
+    const TAB_THEMES = {
+      1: "radial-gradient(circle at 50% 0%, rgba(0, 242, 254, 0.22), transparent 60%)",
+      2: "radial-gradient(circle at 50% 0%, rgba(0, 245, 212, 0.22), transparent 60%)",
+      3: "radial-gradient(circle at 50% 0%, rgba(157, 78, 221, 0.25), transparent 60%)",
+      4: "radial-gradient(circle at 50% 0%, rgba(255, 190, 11, 0.20), transparent 60%)"
+    };
+
+    function switchTab(tabNum) {
+      triggerHaptic('light');
+      for (let i = 1; i <= 4; i++) {
+        document.getElementById(`tabBtn${i}`).classList.toggle("active", i === tabNum);
+        document.getElementById(`tabPane${i}`).classList.toggle("active", i === tabNum);
+      }
+      if (TAB_THEMES[tabNum]) {
+        document.body.style.backgroundImage = `${TAB_THEMES[tabNum]}, radial-gradient(circle at 100% 100%, rgba(0, 242, 254, 0.10), transparent 50%), linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px)`;
+      }
+      if (tabNum === 3) updateCortexBadge();
+    }
+
+    function toggleMasterAudio() {
+      triggerHaptic('medium');
+      isMasterMuted = !isMasterMuted;
+      const btn = document.getElementById("btnMute");
+      const statusText = document.getElementById("muteStatusText");
+      
+      btn.classList.toggle("active", !isMasterMuted);
+      btn.innerText = isMasterMuted ? "MUTED" : "SOUND";
+      statusText.innerText = isMasterMuted ? "Muted" : "Sound On";
+      
+      if (isMasterMuted) {
+        sendCommand("x"); // Force Absolute Mute on hardware
+        document.getElementById("hudLog").innerText = "[SOUND] 🔇 S2-R2-D2 Audio Muted (Silent Mode)";
+      } else {
+        sendCommand("X"); // Force Absolute Unmute on hardware
+        document.getElementById("hudLog").innerText = "[SOUND] 🔊 S2-R2-D2 Audio Enabled (Speaker Active)";
+      }
+    }
+
+    function honkHorn() {
+      triggerHaptic('medium');
+      sendCommand("h");
+      document.getElementById("hudLog").innerText = "[HORN] 📯 S2-R2-D2 Honking Horn!" + (isMasterMuted ? " (🔇 Muted • Tap SOUND to hear)" : "");
+    }
+
+    function emergencyStop() {
+      triggerHaptic('heavy');
+      stopDriveHeartbeat();
+      gAiVisionAborted = true;
+      lastFlowCmd = 'S';
+      sendCommand("S");
+      document.getElementById("hudLog").innerText = "[STOP] 🛑 Emergency Brake Engaged!";
+    }
+
+    async function triggerRoyalSalute() {
+      triggerHaptic('double');
+      const pilot = localStorage.getItem('s2r2d2_pilot_name') || 'King Shivansh';
+      document.getElementById("hudLog").innerText = `[CORONATION] 👑 All Hail ${pilot}! S2-R2-D2 Saluting the King!` + (isMasterMuted ? " (🔇 Muted • Tap SOUND to hear)" : "");
+      await sendCommand("G");
+    }
+
+    async function triggerMood(moodChar, logDesc) {
+      triggerHaptic('medium');
+      document.getElementById("hudLog").innerText = `[MOOD] ${logDesc}` + (isMasterMuted ? " (🔇 Muted)" : "");
+      await sendCommand(moodChar);
+    }
+
+    function playVictoryDance() {
+      triggerHaptic('double');
+      sendCommand("K");
+      document.getElementById("hudLog").innerText = "[DANCE] 💃 S2-R2-D2 360° Victory Dance!" + (isMasterMuted ? " (🔇 Muted • Tap SOUND to hear)" : "");
+    }
+
+    function playPartySpin() {
+      triggerHaptic('heavy');
+      sendCommand("U");
+      document.getElementById("hudLog").innerText = "[PARTY] 🎯 S2-R2-D2 Party Spinner Spinning!" + (isMasterMuted ? " (🔇 Muted • Tap SOUND to hear)" : "");
+    }
+
+    // ========================================================================
+    // 🌊 1. 360° DRIFT PAD (SAFETY-HARDENED POINTER CONTROLS)
+    // ========================================================================
+    const flowPad = document.getElementById("flowPad");
+    const flowThumb = document.getElementById("flowThumb");
+    let isTouchingPad = false;
+
+    function handleFlowMove(e) {
+      if (!isTouchingPad) return;
+      const rect = flowPad.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+      let dx = clientX - (rect.left + rect.width / 2);
+      let dy = clientY - (rect.top + rect.height / 2);
+
+      const maxR = rect.width / 2 - 25;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > maxR) {
+        dx = (dx / dist) * maxR;
+        dy = (dist > 0 ? (dy / dist) * maxR : 0);
+      }
+
+      flowThumb.style.left = `${rect.width / 2 + dx}px`;
+      flowThumb.style.top  = `${rect.height / 2 + dy}px`;
+
+      const normX = dx / maxR;
+      const normY = -dy / maxR;
+      document.getElementById("flowVectorLabel").innerText = `Vector: [${normX.toFixed(2)}, ${normY.toFixed(2)}]`;
+
+      let targetCmd = 'S';
+      if (normY > 0.35 && Math.abs(normX) < 0.4) targetCmd = 'F';
+      else if (normY < -0.35 && Math.abs(normX) < 0.4) targetCmd = 'B';
+      else if (normX < -0.35) targetCmd = 'L';
+      else if (normX > 0.35) targetCmd = 'R';
+      else targetCmd = 'S';
+
+      if (targetCmd !== lastFlowCmd) {
+        lastFlowCmd = targetCmd;
+        triggerHaptic(targetCmd === 'S' ? 'light' : 'medium');
+        sendCommand(targetCmd);
+        if (targetCmd !== 'S') {
+          startDriveHeartbeat(targetCmd);
+        } else {
+          stopDriveHeartbeat();
+        }
+      }
+    }
+
+    let driveHeartbeatTimer = null;
+    function startDriveHeartbeat(cmd) {
+      stopDriveHeartbeat();
+      if (cmd !== 'S') {
+        driveHeartbeatTimer = setInterval(() => {
+          if (rxTxChar || isUsbConnected) {
+            sendCommand(cmd);
+          }
+        }, 150);
+      }
+    }
+    function stopDriveHeartbeat() {
+      if (driveHeartbeatTimer) {
+        clearInterval(driveHeartbeatTimer);
+        driveHeartbeatTimer = null;
+      }
+    }
+
+    function handlePadRelease() {
+      if (isTouchingPad) {
+        isTouchingPad = false;
+        stopDriveHeartbeat();
+        if (lastFlowCmd !== 'S') {
+          lastFlowCmd = 'S';
+          sendCommand('S'); // 🛑 Bumper Stop sent FIRST!
+        }
+        triggerHaptic('light');
+        flowThumb.style.left = "50%";
+        flowThumb.style.top  = "50%";
+        document.getElementById("flowVectorLabel").innerText = "Center [0, 0]";
+      }
+    }
+
+    flowPad.addEventListener("pointerdown", (e) => { 
+      isTouchingPad = true; 
+      triggerHaptic('light');
+      handleFlowMove(e); 
+    });
+    window.addEventListener("pointermove", (e) => {
+      if (isTouchingPad) {
+        handleFlowMove(e);
+      }
+    });
+    window.addEventListener("pointerup", handlePadRelease);
+    window.addEventListener("pointercancel", handlePadRelease);
+
+    // 🛑 BACKGROUND SAFETY AUTO-STOP (Tab switched / phone sleep / lost focus)
+    window.addEventListener("blur", () => {
+      stopDriveHeartbeat();
+      if (lastFlowCmd !== 'S') {
+        lastFlowCmd = 'S';
+        sendCommand('S');
+      }
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        stopDriveHeartbeat();
+        if (lastFlowCmd !== 'S') {
+          lastFlowCmd = 'S';
+          sendCommand('S');
+        }
+      }
+    });
+
+    // ========================================================================
+    // 👁️ 2. SMART CAMERA (FIND & GO) & WEBCAM CYCLER
+    // ========================================================================
+    async function cycleVideoInput() {
+      const video = document.getElementById("cameraStream");
+      const placeholder = document.getElementById("cameraPlaceholder");
+      
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        availableVideoDevices = devices.filter(d => d.kind === 'videoinput');
+
+        if (availableVideoDevices.length === 0) {
+          alert("No camera or USB webcam detected!");
+          return;
+        }
+
+        if (video.srcObject) {
+          video.srcObject.getTracks().forEach(t => t.stop());
+          currentDeviceIndex = (currentDeviceIndex + 1) % availableVideoDevices.length;
+        }
+
+        const chosenDev = availableVideoDevices[currentDeviceIndex];
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: chosenDev.deviceId } }
+        });
+
+        video.srcObject = stream;
+        video.style.display = "block";
+        placeholder.style.display = "none";
+        cameraActive = true;
+        document.getElementById("hudLog").innerText = `[CAM ACTIVE] ${chosenDev.label || 'Camera'}`;
+      } catch(err) {
+        console.error("Camera Switch Error:", err);
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          video.srcObject = stream;
+          video.style.display = "block";
+          placeholder.style.display = "none";
+          cameraActive = true;
+          document.getElementById("hudLog").innerText = "[CAM ACTIVE] Default Camera";
+        } catch(e) {
+          document.getElementById("hudLog").innerText = "[CAM ERROR] " + err.message;
+        }
+      }
+    }
+
+    async function toggleQuikScreenCapture() {
+      const video = document.getElementById("cameraStream");
+      const placeholder = document.getElementById("cameraPlaceholder");
+      if (!cameraActive) {
+        try {
+          if (!navigator.mediaDevices.getDisplayMedia) {
+            alert("GoPro Screen Capture is supported on Mac Chrome/Safari & Android!");
+            return;
+          }
+          const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          video.srcObject = stream;
+          video.style.display = "block";
+          placeholder.style.display = "none";
+          cameraActive = true;
+          document.getElementById("hudLog").innerText = "[GOPRO] Live GoPro Stream Linked!";
+        } catch(err) {
+          document.getElementById("hudLog").innerText = "[GOPRO ERROR] " + err.message;
+        }
+      } else {
+        if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+        video.style.display = "none";
+        placeholder.style.display = "block";
+        cameraActive = false;
+      }
+    }
+
+    async function executeRealGeminiVisionGoal() {
+      if (typeof CortexAPI === 'undefined' || !CortexAPI.hasApiKey()) {
+        document.getElementById("hudLog").innerText = "[!] Please set your Gemini API key to enable Smart Camera.";
+        promptSetApiKey();
+        return;
+      }
+
+      const goal = document.getElementById("aiGoalInput").value.trim();
+      if (!goal) {
+        document.getElementById("hudLog").innerText = "[!] Type a target first (e.g. 'Find my mug')";
+        return;
+      }
+
+      const video = document.getElementById("cameraStream");
+      if (!cameraActive || video.readyState < 2) {
+        document.getElementById("hudLog").innerText = "[!] Tap '🔄 CAM' or '📺 GOPRO' to open camera first!";
+        return;
+      }
+
+      document.getElementById("hudLog").innerText = "[FIND & DRIVE] Taking photo...";
+      document.getElementById("aiStatTarget").innerText = "Analyzing Frame...";
+      document.getElementById("aiStatDist").innerText = "Calculating Distance...";
+      document.getElementById("aiStatReason").innerText = "Finding object and planning route...";
+
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const base64Data = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+
+      document.getElementById("hudLog").innerText = "[FIND & DRIVE] Looking for target...";
+
+      try {
+        const plan = await CortexAPI.analyzeVisionTarget(goal, base64Data);
+
+        // Update glowing HUD card immediately below camera
+        document.getElementById("aiStatTarget").innerText = plan.target || "Object Found";
+        document.getElementById("aiStatDist").innerText = `${plan.distance_cm} cm (${plan.bearing_deg > 0 ? '+' : ''}${plan.bearing_deg}°)`;
+        document.getElementById("aiStatReason").innerText = plan.reasoning || "Target located in camera frame.";
+
+        // 🎯 HUD TARGET RETICLE OVERLAY
+        const reticle = document.getElementById("targetReticle");
+        if (reticle) {
+          reticle.style.display = "block";
+          const offsetPct = Math.max(18, Math.min(82, 50 + (plan.bearing_deg || 0) * 0.9));
+          reticle.style.left = `${offsetPct}%`;
+          reticle.style.top = "50%";
+        }
+
+        triggerHaptic('double');
+
+        if (!rxTxChar) {
+          document.getElementById("hudLog").innerText = `[SPOTTED] ${plan.target} @ ${plan.distance_cm}cm! (Droid offline)`;
+          return;
+        }
+
+        // 👁️ DROID VOCALIZATION: Chirp target lock-on!
+        await sendCommand("V");
+        await new Promise(r => setTimeout(r, 200));
+
+        gAiVisionAborted = false;
+        document.getElementById("hudLog").innerText = `[DRIVING] Moving toward ${plan.target}...`;
+
+        if (plan.actions && plan.actions.length > 0) {
+          const allowedCmds = ['F', 'B', 'L', 'R', 'S'];
+          const boundedActions = plan.actions.slice(0, 4); // Max 4 bounded steps
+          
+          for (const step of boundedActions) {
+            if (gAiVisionAborted) {
+              sendCommand("S");
+              document.getElementById("hudLog").innerText = "[AI] Navigation aborted by pilot.";
+              break;
+            }
+            const cleanCmd = (step.cmd || 'S').toUpperCase();
+            if (!allowedCmds.includes(cleanCmd)) continue; // Drop rogue mode changes!
+            
+            const clampedDuration = Math.min(500, Math.max(50, step.duration_ms || 200)); // Clamp 50ms - 500ms
+            document.getElementById("hudLog").innerText = `[MOVING] Action '${cleanCmd}' (${clampedDuration}ms)...`;
+            
+            await sendCommand(cleanCmd);
+            await new Promise(r => setTimeout(r, clampedDuration));
+            await sendCommand("S"); // Inter-step safety brake
+            await new Promise(r => setTimeout(r, 60));
+          }
+          
+          await sendCommand("S");
+          if (!gAiVisionAborted) {
+            await new Promise(r => setTimeout(r, 100));
+            await sendCommand("G"); // Celebration greeting chirp!
+            document.getElementById("hudLog").innerText = `[REACHED] Target Reached: ${plan.target}!`;
+          }
+          if (reticle) reticle.style.display = "none";
+        }
+      } catch (err) {
+        console.error("Gemini Vision Error:", err);
+        const reticle = document.getElementById("targetReticle");
+        if (reticle) reticle.style.display = "none";
+        document.getElementById("hudLog").innerText = `[ERROR] ${err.message}`;
+        document.getElementById("aiStatTarget").innerText = "⚠️ Error";
+        document.getElementById("aiStatReason").innerText = err.message;
+      }
+    }
+
+    // ========================================================================
+    // ♟️ GRANDMASTER CHESS ARBITER (GEMINI VISION AI)
+    // ========================================================================
+    async function analyzePhysicalChessboard() {
+      triggerHaptic('medium');
+      const video = document.getElementById("cameraStream");
+      const key = getGeminiApiKey();
+
+      if (!video || !video.videoWidth) {
+        alert("Please tap '🔄 CAM' or '📺 GOPRO' first to activate the live video feed!");
+        return;
+      }
+      if (!key || key.length < 10) {
+        document.getElementById("hudLog").innerText = "[!] Please set your Gemini API key to enable Chess Arbiter.";
+        promptSetApiKey();
+        return;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = 640;
+      canvas.height = 480;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, 640, 480);
+      const base64Data = canvas.toDataURL("image/jpeg", 0.85).split(',')[1];
+
+      document.getElementById("hudLog").innerText = "[CHESS AI] ♟️ Grandmaster Second analyzing board...";
+      document.getElementById("aiStatTarget").innerText = "♟️ Analyzing Position...";
+      document.getElementById("aiStatDist").innerText = "Calculating Centipawns...";
+      document.getElementById("aiStatReason").innerText = "Identifying piece coordinates & candidate moves...";
+
+      try {
+        const result = await CortexAPI.analyzeChessboard(base64Data);
+
+        document.getElementById("aiStatTarget").innerText = `Move: ♞ ${result.best_move || "Nf3+"}`;
+        document.getElementById("aiStatDist").innerText = `Eval: ${result.evaluation || "+1.50"}`;
+        document.getElementById("aiStatReason").innerText = result.tactical_idea || "Strongest tactical continuation.";
+        document.getElementById("hudLog").innerText = `[CHESS ARBITER] ♟️ Best Move: ${result.best_move} (${result.evaluation})`;
+
+        triggerHaptic('double');
+
+        // Stream move to S2-R2-D2's physical 8x8 LED Matrix Marquee!
+        if (rxTxChar && result.best_move) {
+          await sendCommand(`W${result.best_move}\n`);
+        }
+      } catch(e) {
+        console.error("Chess Vision Error:", e);
+        document.getElementById("hudLog").innerText = `[ERROR] ${e.message}`;
+        document.getElementById("aiStatTarget").innerText = "⚠️ Error";
+        document.getElementById("aiStatReason").innerText = e.message;
+      }
+    }
+
+    function triggerKnightLMove() {
+      triggerHaptic('medium');
+      sendCommand("Z");
+      document.getElementById("hudLog").innerText = "[TACTIC] ♞ S2-R2-D2 Executing Knight's L-Path Maneuver!";
+    }
+
+    // ========================================================================
+    // 🎙️ WHISPER & SHOUT DRIVE
+    // ========================================================================
+    async function startAudioVlaVoice() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioCtx();
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        document.getElementById("hudLog").innerText = "[VOICE] Listening... Whisper or Shout!";
+
+        let checkCount = 0;
+        const interval = setInterval(() => {
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+          let avg = sum / dataArray.length;
+
+          // Real-time Visual VU Meter
+          const bars = Math.min(10, Math.floor(avg / 7));
+          const meterStr = "█".repeat(bars) + "░".repeat(10 - bars);
+          document.getElementById("hudLog").innerText = `[VOICE MIC] 🎙️ [${meterStr}] (Lvl ${Math.round(avg)}) • Whisper or Shout!`;
+
+          if (avg > 70) {
+            clearInterval(interval);
+            stream.getTracks().forEach(t => t.stop());
+            shiftGear(3, 'e');
+            sendCommand("F");
+            document.getElementById("hudLog").innerText = `[VOICE] 🚀 SHOUT DETECTED! (Lvl ${Math.round(avg)}) -> TURBO DASH!`;
+            setTimeout(() => sendCommand("S"), 800);
+          } else if (avg > 12 && avg < 42 && checkCount > 15) {
+            clearInterval(interval);
+            stream.getTracks().forEach(t => t.stop());
+            shiftGear(1, 'q');
+            sendCommand("F");
+            document.getElementById("hudLog").innerText = `[VOICE] 🐢 WHISPER DETECTED! (Lvl ${Math.round(avg)}) -> STEALTH CRAWL`;
+            setTimeout(() => sendCommand("S"), 600);
+          }
+
+          checkCount++;
+          if (checkCount > 80) {
+            clearInterval(interval);
+            stream.getTracks().forEach(t => t.stop());
+            document.getElementById("hudLog").innerText = "[VOICE] Listening timed out. Tap 'LISTEN' to try again!";
+          }
+        }, 100);
+      } catch(err) {
+        alert("Microphone required for Voice Drive: " + err.message);
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // 🧭 FULL ROOM SCOUT
+    // ------------------------------------------------------------------------
+    function triggerAutoRtCuriosity() {
+      document.getElementById("hudLog").innerText = "[SCOUT] Room Scout Active: Exploring room on its own!";
+      triggerMode("1", "🧭 Room Scout Engaged");
+    }
+
+    // ------------------------------------------------------------------------
+    // 📻 THE GRANDMASTER MORSE CODE ACADEMY ENGINE
+    // ------------------------------------------------------------------------
+    const MORSE_TABLE = {
+      'A': '.-',   'B': '-...', 'C': '-.-.', 'D': '-..',
+      'E': '.',    'F': '..-.', 'G': '--.',  'H': '....',
+      'I': '..',   'J': '.---', 'K': '-.-',  'L': '.-..',
+      'M': '--',   'N': '-.',   'O': '---',  'P': '.--.',
+      'Q': '--.-', 'R': '.-.',  'S': '...',  'T': '-',
+      'U': '..-',  'V': '...-', 'W': '.--',  'X': '-..-',
+      'Y': '-.--', 'Z': '--..', '1': '.----','2': '..---',
+      '3': '...--','4': '....-','5': '.....','6': '-....',
+      '7': '--...','8': '---..','9': '----.','0': '-----'
+    };
+
+    let morseScore = 0;
+    let currentQuizTarget = 'S';
+    let telegraphDownTime = 0;
+    let currentMorseBuffer = "";
+    let telegraphDecodeTimeout = null;
+
+    async function playMorseQuizRound() {
+      triggerHaptic('medium');
+      const letters = Object.keys(MORSE_TABLE);
+      currentQuizTarget = letters[Math.floor(Math.random() * letters.length)];
+
+      // Pick 3 random distractors
+      const options = [currentQuizTarget];
+      while (options.length < 4) {
+        const rand = letters[Math.floor(Math.random() * letters.length)];
+        if (!options.includes(rand)) options.push(rand);
+      }
+      options.sort(() => Math.random() - 0.5);
+
+      // Render multiple choice buttons
+      const optContainer = document.getElementById("morseQuizOptions");
+      optContainer.innerHTML = "";
+      options.forEach(letter => {
+        const btn = document.createElement("button");
+        btn.className = "btn-spy-preset";
+        btn.style.fontSize = "0.72rem";
+        btn.innerText = `${letter} (${MORSE_TABLE[letter]})`;
+        btn.onclick = () => checkMorseAnswer(letter);
+        optContainer.appendChild(btn);
+      });
+
+      document.getElementById("morseQuizHint").innerText = `🎧 S2-R2-D2 Transmitting Secret Letter... Listen & Decode!`;
+      document.getElementById("hudLog").innerText = `[MORSE ACADEMY] 📻 S2-R2-D2 Transmitting secret code...`;
+
+      // Transmit the secret letter to S2-R2-D2 buzzer & matrix!
+      await sendCommand("T" + currentQuizTarget);
+    }
+
+    async function checkMorseAnswer(chosenLetter) {
+      const isCorrect = (chosenLetter === currentQuizTarget);
+      triggerHaptic(isCorrect ? 'double' : 'medium');
+      const hintEl = document.getElementById("morseQuizHint");
+      const scoreEl = document.getElementById("morseScoreLabel");
+
+      if (isCorrect) {
+        morseScore += 10;
+        let rank = "Cadet";
+        if (morseScore >= 60) rank = "Grandmaster Telegrapher 👑";
+        else if (morseScore >= 30) rank = "Senior Scout ⭐";
+        else if (morseScore >= 10) rank = "Telegrapher 📻";
+
+        scoreEl.innerText = `⭐ Score: ${morseScore} • ${rank}`;
+        hintEl.innerHTML = `✅ <span style="color:var(--neon-green); font-weight:800;">CORRECT!</span> "${currentQuizTarget}" is <code>${MORSE_TABLE[currentQuizTarget]}</code>! S2-R2-D2 is ecstatic!`;
+        document.getElementById("hudLog").innerText = `[MORSE ACADEMY] ✅ Correct! +10 Points! (Total: ${morseScore})`;
+        
+        // S2-R2-D2 celebrates in Ecstasy!
+        await sendCommand("Y");
+      } else {
+        hintEl.innerHTML = `❌ <span style="color:var(--danger); font-weight:800;">INCORRECT!</span> It was "${currentQuizTarget}" (<code>${MORSE_TABLE[currentQuizTarget]}</code>)`;
+        document.getElementById("hudLog").innerText = `[MORSE ACADEMY] ❌ Incorrect! It was ${currentQuizTarget} (${MORSE_TABLE[currentQuizTarget]})`;
+        
+        // S2-R2-D2 gives a grumpy mechanical grunt
+        await sendCommand("D");
+      }
+    }
+
+    // Telegraph Key Handlers
+    function onTelegraphDown() {
+      triggerHaptic('light');
+      telegraphDownTime = Date.now();
+      const btn = document.getElementById("btnTelegraphKey");
+      btn.style.background = "var(--neon-green)";
+      btn.style.color = "#000";
+    }
+
+    async function onTelegraphUp() {
+      const duration = Date.now() - telegraphDownTime;
+      const btn = document.getElementById("btnTelegraphKey");
+      btn.style.background = "";
+      btn.style.color = "";
+
+      const symbol = duration < 200 ? "." : "-";
+      currentMorseBuffer += symbol;
+
+      // Mirror on S2-R2-D2 buzzer & matrix!
+      if (symbol === ".") await sendCommand("T.");
+      else await sendCommand("T-");
+
+      document.getElementById("telegraphDecoded").innerText = `Tapping: ${currentMorseBuffer}`;
+
+      clearTimeout(telegraphDecodeTimeout);
+      telegraphDecodeTimeout = setTimeout(() => {
+        let decodedChar = "?";
+        for (const [char, pat] of Object.entries(MORSE_TABLE)) {
+          if (pat === currentMorseBuffer) { decodedChar = char; break; }
+        }
+        document.getElementById("telegraphDecoded").innerText = `Decoded: "${decodedChar}" (${currentMorseBuffer})`;
+        document.getElementById("hudLog").innerText = `[TELEGRAPH KEY] Tapped "${decodedChar}" (${currentMorseBuffer})`;
+        currentMorseBuffer = "";
+      }, 850);
+    }
+
+    async function transmitCustomSpyMessage() {
+      const msg = document.getElementById("spyMsgInput").value.trim().toUpperCase();
+      if (!msg) {
+        document.getElementById("hudLog").innerText = "[MORSE] Type a secret message first (e.g. 'SOS', 'KING')";
+        return;
+      }
+      sendPresetSpyMsg(msg);
+    }
+
+    async function sendPresetSpyMsg(word) {
+      const cleanWord = word.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!cleanWord) return;
+      
+      document.getElementById("hudLog").innerText = `[MORSE BROADCAST] S2-R2-D2 Beeping: "${cleanWord}"...`;
+      
+      for (let i = 0; i < cleanWord.length; i++) {
+        await sendCommand("T" + cleanWord[i]);
+        await new Promise(r => setTimeout(r, 650));
+      }
+      
+      document.getElementById("hudLog").innerText = `[MORSE BROADCAST] "${cleanWord}" transmission complete!`;
+    }
+
+    // ========================================================================
+    // 🌐 REAL-TIME WEATHER, CLOCK & ROYAL BRIEFING ENGINE
+    // ========================================================================
+    let currentLiveTemp = "24°C";
+    let currentLiveCondition = "Clear";
+
+    async function initClockAndWeather() {
+      updateClock();
+      setInterval(updateClock, 10000);
+      await fetchLiveWeather();
+      setInterval(fetchLiveWeather, 600000); // 10 min refresh
+      initHourlyHorologist();
+    }
+
+    // ========================================================================
+    // 🔔 ASTROMECH HOURLY HOROLOGIST (ON-DEMAND & TOP-OF-THE-HOUR CEREMONY)
+    // ========================================================================
+    let isHourlyChimeEnabled = localStorage.getItem('s2r2d2_hourly_chime') === 'true';
+    let lastChimeHour = -1;
+
+    function initHourlyHorologist() {
+      const btn = document.getElementById("btnChimeToggle");
+      const sub = document.getElementById("chimeSubText");
+      if (btn) btn.classList.toggle("active", isHourlyChimeEnabled);
+      if (sub) sub.innerText = isHourlyChimeEnabled ? "Chimes on :00" : "Silent";
+
+      checkHourlyChime();
+      setInterval(checkHourlyChime, 10000); // Check top of hour every 10s
+    }
+
+    async function checkHourlyChime() {
+      if (!isHourlyChimeEnabled) return;
+      if (!rxTxChar && !isUsbConnected) return; // Only if linked
+      if (currentActiveMission || isTouchingPad) return;
+
+      const now = new Date();
+      const minute = now.getMinutes();
+      const currentHour = now.getHours();
+
+      // Top-of-the-hour proclamation strictly on minute 0 (:00)
+      if (minute === 0 && lastChimeHour !== currentHour) {
+        lastChimeHour = currentHour;
+        await triggerHourlyChime(false);
+      }
+    }
+
+    async function triggerHourlyChime(isTest = false) {
+      const now = new Date();
+      const hours = now.getHours();
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const displayHour = (hours % 12 || 12);
+      const timeStr = `${displayHour}:${minutes} ${ampm}`;
+
+      let tempStr = "";
+      if (currentLiveTemp) tempStr = ` - ${currentLiveTemp.replace('°', '')}`;
+      const fullBanner = `${timeStr}${tempStr}`;
+
+      document.getElementById("hudLog").innerText = `[HOROLOGY] 🔔 Top-of-the-Hour Chime: ${timeStr} • Proclamation active...`;
+
+      // 1. Stream Marquee once across face, then returns to Royal Crown [ 👑 ]
+      await sendCommand(`@${fullBanner}\n`);
+
+      // 2. Vocal Grandmaster Proclamation (Warm, Calm & Respectful)
+      if (!isMasterMuted) {
+        let spokenHour = `${displayHour} o'clock ${ampm === 'AM' ? 'in the morning' : (hours < 18 ? 'in the afternoon' : 'in the evening')}`;
+        if (displayHour === 12 && ampm === 'PM') spokenHour = "12 noon";
+        if (displayHour === 12 && ampm === 'AM') spokenHour = "midnight";
+
+        let weatherSnippet = currentLiveTemp ? `, ${currentLiveTemp}` : "";
+        let vocalLine = `It is ${spokenHour}${weatherSnippet}. S2-R2-D2 sentry patrol standing by.`;
+        
+        if (hours >= 23 || hours < 5) {
+          vocalLine = `It is ${displayHour} ${ampm}${weatherSnippet}. S2-R2-D2 night watch is active.`;
+        }
+
+        speakVocalMessage(vocalLine);
+      }
+    }
+
+    function toggleHourlyChime() {
+      triggerHaptic('medium');
+      isHourlyChimeEnabled = !isHourlyChimeEnabled;
+      localStorage.setItem('s2r2d2_hourly_chime', isHourlyChimeEnabled ? 'true' : 'false');
+      
+      const btn = document.getElementById("btnChimeToggle");
+      const sub = document.getElementById("chimeSubText");
+      if (btn) {
+        btn.classList.toggle("active", isHourlyChimeEnabled);
+        btn.innerText = isHourlyChimeEnabled ? "CHIME ON" : "OFF";
+      }
+      if (sub) {
+        sub.innerText = isHourlyChimeEnabled ? "Chimes on :00" : "Silent";
+      }
+      document.getElementById("hudLog").innerText = isHourlyChimeEnabled ? 
+        "[HOROLOGY] 🔔 Hourly Chime on :00 ENABLED!" : 
+        "[HOROLOGY] 🔕 Hourly Chime Disabled (Silent)";
+
+      if (isHourlyChimeEnabled) {
+        triggerHourlyChime(true);
+      }
+    }
+
+    function updateClock() {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const timeEl = document.getElementById("headerTime");
+      if (timeEl) timeEl.innerText = timeStr;
+    }
+
+    async function showTimeOnRobotFace() {
+      triggerHaptic('double');
+      const now = new Date();
+      const hours = now.getHours();
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const formattedHours = (hours % 12 || 12).toString().padStart(2, '0');
+      const timeStr = `${formattedHours}:${minutes} ${ampm}`;
+      
+      // Include live weather temperature if available (e.g. "12:18 AM - 24C")
+      let tempStr = "";
+      if (currentLiveTemp) {
+        tempStr = ` - ${currentLiveTemp.replace('°', '')}`;
+      }
+      const fullBanner = `${timeStr}${tempStr}`;
+      
+      document.getElementById("hudLog").innerText = `[DROID CLOCK] ⏱️ Streaming time & weather to S2-R2-D2: "${fullBanner}"...`;
+      
+      // Stream clock & temperature marquee across 8x8 LED Matrix using dedicated '@' protocol!
+      await sendCommand(`@${fullBanner}\n`);
+    }
+
+    async function fetchLiveWeather() {
+      try {
+        let lat = 12.9716, lon = 77.5946; // Default Bengaluru / India
+        if ("geolocation" in navigator) {
+          navigator.geolocation.getCurrentPosition(
+            pos => {
+              lat = pos.coords.latitude;
+              lon = pos.coords.longitude;
+              queryOpenMeteo(lat, lon);
+            },
+            () => queryOpenMeteo(lat, lon),
+            { timeout: 3000 }
+          );
+        } else {
+          queryOpenMeteo(lat, lon);
+        }
+      } catch (e) {
+        console.warn("Weather init fallback:", e);
+      }
+    }
+
+    async function queryOpenMeteo(lat, lon) {
+      if (typeof CortexAPI !== 'undefined') {
+        const weather = await CortexAPI.fetchLiveWeather(lat, lon);
+        currentLiveTemp = weather.temp;
+        currentLiveCondition = weather.condition;
+      } else {
+        try {
+          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+          const data = await res.json();
+          if (data && data.current_weather) {
+            const temp = Math.round(data.current_weather.temperature);
+            const code = data.current_weather.weathercode;
+            let cond = "Clear ☀️";
+            if (code >= 1 && code <= 3) cond = "Partly Cloudy ⛅";
+            else if (code >= 45 && code <= 48) cond = "Foggy 🌫️";
+            else if (code >= 51 && code <= 67) cond = "Rain 🌧️";
+            else if (code >= 71 && code <= 77) cond = "Snow ❄️";
+            else if (code >= 80 && code <= 82) cond = "Showers 🌦️";
+            else if (code >= 95) cond = "Thunderstorm ⚡";
+            currentLiveTemp = `${temp}°C`;
+            currentLiveCondition = cond;
+          }
+        } catch (e) {
+          console.warn("Weather fallback:", e);
+        }
+      }
+      const wEl = document.getElementById("headerWeather");
+      if (wEl) wEl.innerText = `${currentLiveTemp} ${currentLiveCondition}`;
+    }
+
+    async function triggerRoyalBriefing() {
+      triggerHaptic('double');
+      const pilot = localStorage.getItem('s2r2d2_pilot_name') || 'King Shivansh';
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      
+      document.getElementById("hudLog").innerText = `[BRIEFING] 👑 Generating Royal Executive Briefing for ${pilot}...`;
+      const statusEl = document.getElementById("briefingStatusText");
+      if (statusEl) statusEl.innerText = `👑 Analyzing real-time context (${timeStr}, ${currentLiveTemp} ${currentLiveCondition})...`;
+
+      let briefingText = `Good day ${pilot}! It is currently ${timeStr}, ${currentLiveTemp} with ${currentLiveCondition}. S2-R2-D2 reports all perimeter defenses and royal motors are fully armed and at your command!`;
+
+      if (typeof CortexAPI !== 'undefined') {
+        briefingText = await CortexAPI.fetchRoyalBriefing(pilot, timeStr, currentLiveTemp, currentLiveCondition);
+      }
+
+      if (statusEl) statusEl.innerText = `🎙️ "${briefingText}"`;
+      document.getElementById("hudLog").innerText = `[BRIEFING] 👑 "${briefingText.slice(0, 45)}..."`;
+
+      // 1. Speak aloud via Web Speech API
+      speakVocalMessage(briefingText);
+
+      // 2. Play Royal Coronation Fanfare on S2-R2-D2!
+      await sendCommand("G");
+
+      // 3. Scroll Weather across 8x8 LED Matrix!
+      const weatherBanner = ` ${currentLiveTemp} ${currentLiveCondition.toUpperCase()} ${pilot.toUpperCase()} `;
+      await new Promise(r => setTimeout(r, 800));
+      await sendCommand(`W${weatherBanner}\n`);
+    }
+
+    function speakVocalMessage(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.05;
+        utterance.pitch = 1.1;
+        const voices = window.speechSynthesis.getVoices();
+        const britishOrDaniel = voices.find(v => v.lang.includes('en') && (v.name.includes('Daniel') || v.name.includes('Google') || v.name.includes('Samantha')));
+        if (britishOrDaniel) utterance.voice = britishOrDaniel;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    async function askGeminiVocalBrain() {
+      const input = document.getElementById("askGeminiInput");
+      const query = input.value.trim();
+      if (!query) return;
+      
+      triggerHaptic('medium');
+      const pilot = localStorage.getItem('s2r2d2_pilot_name') || 'King Shivansh';
+      document.getElementById("hudLog").innerText = `[AI BRAIN] 🧠 Processing: "${query}"...`;
+      
+      try {
+        const response = typeof CortexAPI !== 'undefined' 
+          ? await CortexAPI.askVocalBrain(pilot, query)
+          : { text: "Astromech local circuits standing by!", isOffline: true };
+
+        const cleanReply = response.text;
+
+        document.getElementById("briefingStatusText").innerText = `🤖 S2-R2-D2: "${cleanReply}"`;
+        document.getElementById("hudLog").innerText = `${response.isOffline ? '[OFFLINE CORTEX]' : '[AI BRAIN]'} 🤖 "${cleanReply.slice(0, 45)}..."`;
+
+        // 1. Speak answer aloud
+        speakVocalMessage(cleanReply);
+
+        // 2. Play affirmative chirp on S2-R2-D2
+        await sendCommand("A");
+
+        // 3. Scroll key response across 8x8 LED matrix
+        const firstWords = cleanReply.split(' ').slice(0, 3).join(' ').toUpperCase();
+        await new Promise(r => setTimeout(r, 300));
+        await sendCommand(`W ${firstWords} \n`);
+        
+        input.value = "";
+      } catch (err) {
+        console.error("Gemini Vocal Error:", err);
+        document.getElementById("hudLog").innerText = `[ERROR] ${err.message}`;
+      }
+    }
+
+    function listenVoiceToAskGemini() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Speech Recognition not supported in this browser. Please type your query!");
+        return;
+      }
+      triggerHaptic('light');
+      const recognizer = new SpeechRecognition();
+      recognizer.lang = 'en-US';
+      recognizer.interimResults = false;
+      
+      document.getElementById("hudLog").innerText = "[VOICE AI] 🎙️ Listening... Ask S2-R2-D2 your question!";
+      
+      recognizer.onresult = (e) => {
+        const text = e.results[0][0].transcript;
+        document.getElementById("askGeminiInput").value = text;
+        askGeminiVocalBrain();
+      };
+      
+      recognizer.onerror = (e) => {
+        document.getElementById("hudLog").innerText = `[VOICE AI] Error: ${e.error}`;
+      };
+      
+      recognizer.start();
+    }
+
+    // ========================================================================
+    // ⌛ GRANDMASTER POMODORO DESK SENTRY ENGINE
+    // ========================================================================
+    let pomodoroActive = false;
+    let pomodoroTimer = null;
+    let pomodoroTimeLeft = 25 * 60; // 25 minutes
+
+    function togglePomodoroSentry() {
+      pomodoroActive = !pomodoroActive;
+      const btn = document.getElementById("btnPomodoroAction");
+      const card = document.querySelector('[data-mode="P"]');
+
+      if (pomodoroActive) {
+        triggerHaptic('double');
+        pomodoroTimeLeft = 25 * 60;
+        if (btn) btn.innerText = "RUNNING 🟢";
+        if (card) card.classList.add("mission-active-card");
+        
+        triggerMode('7', "⌛ Pomodoro Focus Sentry Active: 25m Deep Work timer started!");
+
+        clearInterval(pomodoroTimer);
+        pomodoroTimer = setInterval(() => {
+          pomodoroTimeLeft--;
+          const mins = Math.floor(pomodoroTimeLeft / 60);
+          const secs = pomodoroTimeLeft % 60;
+          const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+          
+          document.getElementById("hudLog").innerText = `[POMODORO] ⌛ Focus Time Remaining: ${timeStr}`;
+          
+          if (pomodoroTimeLeft <= 0) {
+            clearInterval(pomodoroTimer);
+            pomodoroActive = false;
+            if (btn) btn.innerText = "FOCUS";
+            if (card) card.classList.remove("mission-active-card");
+            
+            // Celebration on work complete!
+            sendCommand("J3"); // Super Mario Fanfare
+            speakVocalMessage("Great work King Shivansh! 25 minutes of deep focus completed. Time for a well-deserved break!");
+            sendCommand("W BREAK TIME \n");
+          }
+        }, 1000);
+      } else {
+        triggerHaptic('medium');
+        clearInterval(pomodoroTimer);
+        if (btn) btn.innerText = "FOCUS";
+        if (card) card.classList.remove("mission-active-card");
+        cancelActiveMission();
+        document.getElementById("hudLog").innerText = "[POMODORO] 🛑 Focus Sentry Disengaged.";
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // DRAW ON DROID FACE
+    // ------------------------------------------------------------------------
+    function initPixelGrid() {
+      const grid = document.getElementById("pixelGrid");
+      grid.innerHTML = "";
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const cell = document.createElement("div");
+          cell.className = "pixel-cell";
+          cell.id = `cell_${r}_${c}`;
+          
+          cell.onclick = () => {
+            triggerHaptic('light');
+            pixelMatrix[r][c] = pixelMatrix[r][c] ? 0 : 1;
+            cell.classList.toggle("active", pixelMatrix[r][c] === 1);
+            streamPixelArtRealtime();
+          };
+          grid.appendChild(cell);
+        }
+      }
+    }
+    initPixelGrid();
+
+    function clearPixelPad() {
+      triggerHaptic('medium');
+      pixelMatrix = Array(8).fill(0).map(() => Array(8).fill(0));
+      document.querySelectorAll(".pixel-cell").forEach(c => c.classList.remove("active"));
+      streamPixelArtRealtime();
+    }
+
+    async function streamPixelArtRealtime() {
+      const bytes = [];
+      bytes.push(0x4D); // 'M'
+
+      for (let row = 0; row < 8; row++) {
+        let b = 0;
+        for (let col = 0; col < 8; col++) {
+          if (pixelMatrix[row][col]) {
+            b |= (1 << (7 - col));
+          }
+        }
+        bytes.push(b);
+      }
+
+      const data = new Uint8Array(bytes);
+      if (isUsbConnected && serialWriter) {
+        try {
+          await serialWriter.write(data);
+          return;
+        } catch(e) {}
+      }
+      if (rxTxChar) {
+        try {
+          if (rxTxChar.writeValueWithoutResponse) {
+            await rxTxChar.writeValueWithoutResponse(data);
+          } else {
+            await rxTxChar.writeValue(data);
+          }
+        } catch(e) {}
+      }
+    }
+
+    async function connectBluetooth() {
+      const hud = document.getElementById("hudLog");
+      if (!navigator.bluetooth) {
+        alert("Web Bluetooth requires Chrome on Android/Mac or Bluefy on iOS.");
+        return;
+      }
+
+      try {
+        hud.innerText = "[SCANNING] Searching for S2-R2-D2...";
+        bluetoothDevice = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [SERVICE_UUID]
+        });
+
+        const currentPilot = localStorage.getItem('s2r2d2_pilot_name') || 'King Shivansh';
+        hud.innerText = `[CONNECTING] Linking with ${bluetoothDevice.name || 'S2-R2-D2'}...`;
+        const server = await bluetoothDevice.gatt.connect();
+        
+        hud.innerText = `[CORONATION] 👑 All Hail ${currentPilot}! S2-R2-D2 Online!`;
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        rxTxChar = await service.getCharacteristic(CHAR_UUID);
+
+        document.getElementById("btDot").classList.add("online");
+        document.getElementById("btStatus").innerText = `👑 ${currentPilot} • Linked to S2-R2-D2`;
+        if (document.getElementById("statusSubLabel")) document.getElementById("statusSubLabel").innerText = "Wireless Telemetry Active";
+        document.getElementById("btnConnect").innerText = "Unlink";
+        hud.innerText = `[CORONATION] 👑 Welcome ${currentPilot}!`;
+
+        setTimeout(() => sendCommand("G"), 200);
+
+        bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+      } catch (err) {
+        console.error(err);
+        hud.innerText = "[LINK RESULT] " + err.message;
+      }
+    }
+
+    function onDisconnected() {
+      document.getElementById("btDot").classList.remove("online");
+      document.getElementById("btStatus").innerText = "Droid Offline";
+      if (document.getElementById("statusSubLabel")) document.getElementById("statusSubLabel").innerText = "Astromech Droid Companion";
+      document.getElementById("btnConnect").innerText = "Link Droid";
+      document.getElementById("hudLog").innerText = "[OFFLINE] S2-R2-D2 Disconnected";
+    }
+
+    let serialPort = null;
+    let serialWriter = null;
+    let isUsbConnected = false;
+
+    async function connectUsbSerial() {
+      if (!("serial" in navigator)) {
+        alert("Web Serial is supported in Google Chrome, Microsoft Edge, and Opera on Mac, PC, and Chromebook.");
+        return;
+      }
+
+      // If already connected, toggle disconnect
+      if (isUsbConnected && serialPort) {
+        try {
+          if (serialWriter) {
+            await serialWriter.close();
+            serialWriter = null;
+          }
+          await serialPort.close();
+          serialPort = null;
+          isUsbConnected = false;
+          document.getElementById("btDot").classList.remove("online");
+          document.getElementById("btStatus").innerText = "Droid Offline";
+          if (document.getElementById("statusSubLabel")) document.getElementById("statusSubLabel").innerText = "Astromech Droid Companion";
+          const usbBtn = document.getElementById("btnConnectUsb");
+          if (usbBtn) {
+            usbBtn.innerText = "🔌 USB";
+            usbBtn.style.background = "rgba(0, 242, 254, 0.15)";
+          }
+          document.getElementById("hudLog").innerText = "[USB] Disconnected from S2-R2-D2.";
+          return;
+        } catch (e) {
+          console.error("Disconnect Error:", e);
+        }
+      }
+
+      try {
+        const hud = document.getElementById("hudLog");
+        hud.innerText = "[USB] Linking USB Port...";
+        serialPort = await navigator.serial.requestPort();
+        await serialPort.open({ baudRate: 9600 });
+        
+        serialWriter = serialPort.writable.getWriter();
+        isUsbConnected = true;
+
+        const currentPilot = localStorage.getItem('s2r2d2_pilot_name') || 'King Shivansh';
+        document.getElementById("btDot").classList.add("online");
+        document.getElementById("btStatus").innerText = `👑 ${currentPilot} • Direct USB Link`;
+        if (document.getElementById("statusSubLabel")) document.getElementById("statusSubLabel").innerText = "Wired Telemetry Active";
+        const usbBtn = document.getElementById("btnConnectUsb");
+        if (usbBtn) {
+          usbBtn.innerText = "Linked (USB)";
+          usbBtn.style.background = "var(--neon-green)";
+        }
+        hud.innerText = `[USB LINK] Connected! Initializing S2-R2-D2...`;
+
+        // Wait 1.8s for Arduino bootloader reset to complete
+        setTimeout(async () => {
+          hud.innerText = `[USB LINK] S2-R2-D2 Ready! Welcome ${currentPilot}!`;
+          await sendCommand("G");
+        }, 1800);
+      } catch (err) {
+        console.error("USB Serial Error:", err);
+        document.getElementById("hudLog").innerText = "[USB ERROR] " + err.message;
+      }
+    }
+
+    async function sendCommand(cmd) {
+      const data = new TextEncoder().encode(cmd);
+      // 1. USB Serial Transport (Wired Mac Desktop Link)
+      if (isUsbConnected && serialWriter) {
+        try {
+          await serialWriter.write(data);
+          return;
+        } catch (err) {
+          console.error("USB TX Error:", err);
+        }
+      }
+      // 2. Web Bluetooth Transport (Wireless Floor Rover)
+      if (rxTxChar) {
+        try {
+          if (rxTxChar.writeValueWithoutResponse) {
+            try {
+              await rxTxChar.writeValueWithoutResponse(data);
+              return;
+            } catch(e) {}
+          }
+          if (rxTxChar.writeValueWithResponse) {
+            await rxTxChar.writeValueWithResponse(data);
+          } else if (rxTxChar.writeValue) {
+            await rxTxChar.writeValue(data);
+          }
+        } catch (err) {
+          console.error("BLE TX Error:", err);
+        }
+      }
+    }
+
+    let throttleDebounceTimer = null;
+    function onSpeedSliderChange(val) {
+      triggerHaptic('light');
+      const percent = parseInt(val);
+      // Map 20% -> 95 PWM (Safe indoor crawl), 50% -> 155 PWM (Cruise), 100% -> 255 PWM (Turbo)
+      const pwm = Math.min(255, Math.max(80, Math.round(55 + (percent / 100) * 200)));
+      
+      let label = `${percent}% • `;
+      if (percent <= 45) label += "♟️ Classical (Precision Calm)";
+      else if (percent <= 75) label += "⏱️ Rapid (Dynamic Cruise)";
+      else label += "⚡ Blitz (Grandmaster Sprint)";
+      
+      if (document.getElementById("speedSliderLabel")) document.getElementById("speedSliderLabel").innerText = label;
+      if (document.getElementById("speedSliderLabel2")) document.getElementById("speedSliderLabel2").innerText = label;
+      
+      const s1 = document.getElementById("speedSlider");
+      const s2 = document.getElementById("speedSlider2");
+      if (s1 && s1.value != percent) s1.value = percent;
+      if (s2 && s2.value != percent) s2.value = percent;
+
+      // Sync transmission buttons
+      const g1 = document.getElementById("gear1");
+      const g2 = document.getElementById("gear2");
+      const g3 = document.getElementById("gear3");
+      if (g1) g1.classList.toggle("active", percent <= 45);
+      if (g2) g2.classList.toggle("active", percent > 45 && percent <= 75);
+      if (g3) g3.classList.toggle("active", percent > 75);
+
+      clearTimeout(throttleDebounceTimer);
+      throttleDebounceTimer = setTimeout(() => {
+        sendCommand(`P${pwm}\n`);
+        document.getElementById("hudLog").innerText = `[THROTTLE] Speed set to ${percent}% (${pwm} PWM)`;
+      }, 100);
+    }
+
+    function shiftGear(gearNum, cmdChar) {
+      triggerHaptic('medium');
+      currentGearNum = gearNum;
+      if (gearNum === 1) onSpeedSliderChange(38);
+      else if (gearNum === 2) onSpeedSliderChange(65);
+      else if (gearNum === 3) onSpeedSliderChange(100);
+      sendCommand(cmdChar);
+    }
+
+    let currentActiveMission = null;
+    let missionStartTime = 0;
+    let missionTimerInterval = null;
+
+    const MISSION_DETAILS = {
+      '5': { title: "♟️ THE KING'S SECOND", detail: "Active Pilot Escort • Sonar Tracking 18-80cm • Sweeping Flanks", tab: 2 },
+      '9': { title: "🚪 THE SICILIAN FORTRESS", detail: "Stationary Door Guard • Ultrasonic Tripwire Armed • Counting Guests", tab: 2 },
+      '6': { title: "🌙 KING'S INDIAN PERIMETER", detail: "Night Sentry • Photocell Darkness Armed • Flashbang Siren Trap", tab: 2 },
+      '7': { title: "☕ DESK COMPANION PATROL", detail: "Edge Cliff Guard • Desk Proximity Active • Fall Protection Engaged", tab: 2 },
+      '1': { title: "🧭 ENDGAME ROOM SCOUT", detail: "Autonomous Room Explorer • Doppler Radar Echolocation Active", tab: 2 },
+      '2': { title: "🏁 QUEEN'S GAMBIT COURIER", detail: "High-Speed Floor Track Navigation • IR Floor Guidance Active", tab: 2 },
+      '8': { title: "🎵 AIR MUSIC THEREMIN", detail: "Contactless Ultrasonic Instrument • Wave hands in air (4-35cm) to play!", tab: 4 },
+      '4': { title: "🎭 ANIMATED FACE SHOW", detail: "Continuous Glowing LED Face Animations • Smiles, Winks & Hearts", tab: 1 }
+    };
+
+    function updateMissionMetrics() {
+      if (!currentActiveMission) return;
+      const elapsedSec = Math.floor((Date.now() - missionStartTime) / 1000);
+      const mins = Math.floor(elapsedSec / 60);
+      const secs = elapsedSec % 60;
+      const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      
+      const timerEl = document.getElementById("activeMissionTimer");
+      if (timerEl) timerEl.innerText = timeStr;
+
+      const patrolEl = document.getElementById("metricPatrolTime");
+      if (patrolEl) patrolEl.innerText = `${mins}m ${secs}s`;
+    }
+
+    async function triggerMode(modeChar, desc) {
+      triggerHaptic('double');
+
+      // If already running this exact mission, disengage cleanly
+      if (currentActiveMission === modeChar) {
+        cancelActiveMission();
+        return;
+      }
+
+      currentActiveMission = modeChar;
+      missionStartTime = Date.now();
+      
+      await sendCommand(modeChar);
+
+      // 1. Show Global Active Mission Banner
+      const hud = document.getElementById("activeMissionHud");
+      const titleEl = document.getElementById("activeMissionTitle");
+      const detailEl = document.getElementById("activeMissionDetail");
+
+      if (hud && MISSION_DETAILS[modeChar]) {
+        hud.style.display = "block";
+        titleEl.innerText = MISSION_DETAILS[modeChar].title;
+        detailEl.innerText = MISSION_DETAILS[modeChar].detail;
+      }
+
+      // 2. Update visual card active states
+      document.querySelectorAll(".feature-card").forEach(card => {
+        card.classList.remove("mission-active-card");
+        const btn = card.querySelector(".btn-card-action");
+        if (btn && btn.getAttribute("data-original-text")) {
+          btn.innerText = btn.getAttribute("data-original-text");
+          btn.style.background = "";
+          btn.style.color = "";
+          btn.style.borderColor = "";
+        }
+      });
+
+      const activeCard = document.querySelector(`[data-mode="${modeChar}"]`);
+      if (activeCard) {
+        activeCard.classList.add("mission-active-card");
+        const btn = activeCard.querySelector(".btn-card-action");
+        if (btn) {
+          if (!btn.getAttribute("data-original-text")) {
+            btn.setAttribute("data-original-text", btn.innerText);
+          }
+          btn.innerText = "RUNNING 🟢";
+          btn.style.background = "rgba(0, 245, 212, 0.25)";
+          btn.style.color = "var(--neon-green)";
+          btn.style.borderColor = "var(--neon-green)";
+        }
+      }
+
+      // 3. Tab 2 Sentry Metric Update
+      const metric = document.getElementById("sentryStatusMetric");
+      if (metric && MISSION_DETAILS[modeChar]) {
+        metric.innerText = `🟢 ON DUTY: ${MISSION_DETAILS[modeChar].title}`;
+        metric.style.color = "var(--neon-green)";
+      }
+
+      clearInterval(missionTimerInterval);
+      missionTimerInterval = setInterval(updateMissionMetrics, 1000);
+      updateMissionMetrics();
+
+      document.getElementById("hudLog").innerText = `[MISSION ACTIVE] ${desc}`;
+    }
+
+    async function cancelActiveMission() {
+      triggerHaptic('heavy');
+      currentActiveMission = null;
+      clearInterval(missionTimerInterval);
+
+      await sendCommand('S'); // Stop robot and return to RC mode
+
+      const hud = document.getElementById("activeMissionHud");
+      if (hud) hud.style.display = "none";
+
+      document.querySelectorAll(".feature-card").forEach(card => {
+        card.classList.remove("mission-active-card");
+        const btn = card.querySelector(".btn-card-action");
+        if (btn && btn.getAttribute("data-original-text")) {
+          btn.innerText = btn.getAttribute("data-original-text");
+          btn.style.background = "";
+          btn.style.color = "";
+          btn.style.borderColor = "";
+        }
+      });
+
+      const metric = document.getElementById("sentryStatusMetric");
+      if (metric) {
+        metric.innerText = "⚪ SENTRY STANDBY";
+        metric.style.color = "var(--subtext)";
+      }
+
+      document.getElementById("hudLog").innerText = "[STAND DOWN] 🛑 Autonomous Mission Disengaged • Manual Control Active";
+    }
+
+    // ------------------------------------------------------------------------
+    // JUKEBOX MELODY ENGINE (DIRECT WIRELESS TRANSMISSION TO S2-R2-D2 ONLY)
+    // ------------------------------------------------------------------------
+    async function playSong(songCode, songName) {
+      if (rxTxChar || isUsbConnected) {
+        await sendCommand(songCode);
+      }
+      document.getElementById("hudLog").innerText = `[MUSIC] S2-R2-D2 Playing ${songName} on onboard speaker...` + (isMasterMuted ? " (🔇 Muted • Tap SOUND to hear)" : "");
+    }
+
+    let lastGyroCmd = 'S';
+    function toggleGyroControl() {
+      gyroActive = !gyroActive;
+      const btn = document.getElementById("btnGyro");
+      btn.classList.toggle("active", gyroActive);
+      btn.innerText = gyroActive ? "ON" : "OFF";
+
+      if (gyroActive) {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          DeviceOrientationEvent.requestPermission()
+            .then(perm => {
+              if (perm === 'granted') window.addEventListener('deviceorientation', handleOrientation);
+            });
+        } else {
+          window.addEventListener('deviceorientation', handleOrientation);
+        }
+        document.getElementById("hudLog").innerText = "[TILT STEER] Lean phone in any direction to drive!";
+      } else {
+        window.removeEventListener('deviceorientation', handleOrientation);
+        sendCommand('S');
+      }
+    }
+
+    function handleOrientation(e) {
+      if (!gyroActive || !rxTxChar) return;
+      const gamma = e.gamma;
+      const beta  = e.beta;
+
+      let targetCmd = 'S';
+      if (beta > 35) targetCmd = 'B';
+      else if (beta < 10) targetCmd = 'F';
+      else if (gamma < -20) targetCmd = 'L';
+      else if (gamma > 20) targetCmd = 'R';
+      else targetCmd = 'S';
+
+      if (targetCmd !== lastGyroCmd) {
+        lastGyroCmd = targetCmd;
+        sendCommand(targetCmd);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initClockAndWeather();
+      initPixelGrid();
+    });
+  </script>
+</body>
+</html>

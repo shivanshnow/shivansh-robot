@@ -1,0 +1,40 @@
+# macOS System Files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Environment Variables & Private Outbound Services / Credentials
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.secret
+api_keys.js
+secrets.json
+credentials/
+
+# Build & Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+node_modules/
+dist/
+build/
+.cache/
+
+# Python Runtime
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+
+# Scratch & Temporary Logs
+scratch/
+.system_generated/
