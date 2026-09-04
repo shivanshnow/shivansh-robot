@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>⚡ MECHA OS • S2-R2-D2 Mission Control</title>
   <style>
     :root {
@@ -621,8 +621,8 @@
         </div>
       </div>
       <div style="display:flex; gap:6px; align-items:center;">
-        <button class="btn-connect" id="btnConnect" onclick="connectBluetooth()">Link Droid</button>
-        <button class="btn-toggle-mini" id="btnConnectUsb" style="background:rgba(0, 242, 254, 0.15); border-color:var(--neon-cyan); color:var(--neon-cyan); font-weight:800; padding:8px 10px; height:100%; border-radius:10px;" onclick="connectUsbSerial()" title="Direct USB Cable Tether">🔌 USB</button>
+        <button class="btn-connect" id="btnConnect" onclick="connectBluetooth()" aria-label="Link Droid via Bluetooth">Link Droid</button>
+        <button class="btn-toggle-mini" id="btnConnectUsb" style="background:rgba(0, 242, 254, 0.15); border-color:var(--neon-cyan); color:var(--neon-cyan); font-weight:800; padding:8px 10px; height:100%; border-radius:10px;" onclick="connectUsbSerial()" title="Direct USB Cable Tether" aria-label="Connect via Direct USB Cable">🔌 USB</button>
       </div>
     </div>
   </header>
@@ -634,7 +634,7 @@
         <div style="font-size:0.75rem; font-weight:800;">🔊 Droid Voice</div>
         <div style="font-size:0.56rem; color:var(--subtext);" id="muteStatusText">Sound On</div>
       </div>
-      <button class="btn-toggle-mini active" id="btnMute" onclick="toggleMasterAudio()">SOUND</button>
+      <button class="btn-toggle-mini active" id="btnMute" onclick="toggleMasterAudio()" aria-label="Toggle Droid Voice Audio">SOUND</button>
     </div>
 
     <div class="tool-box" style="border-color:rgba(0, 242, 254, 0.4); background:rgba(0, 242, 254, 0.05); cursor:pointer;" onclick="toggleHourlyChime()">
@@ -642,7 +642,7 @@
         <div style="font-size:0.75rem; font-weight:800; color:var(--neon-cyan);">🔔 Hourly Chime</div>
         <div style="font-size:0.56rem; color:var(--neon-green);" id="chimeSubText">Every :00</div>
       </div>
-      <button class="btn-toggle-mini active" id="btnChimeToggle" onclick="event.stopPropagation(); toggleHourlyChime()">CHIME</button>
+      <button class="btn-toggle-mini active" id="btnChimeToggle" onclick="event.stopPropagation(); toggleHourlyChime()" aria-label="Toggle Hourly Chime">CHIME</button>
     </div>
 
     <div class="tool-box">
@@ -650,7 +650,7 @@
         <div style="font-size:0.75rem; font-weight:800;">📱 Tilt Steer</div>
         <div style="font-size:0.56rem; color:var(--subtext);">Motion Drive</div>
       </div>
-      <button class="btn-toggle-mini" id="btnGyro" onclick="toggleGyroControl()">OFF</button>
+      <button class="btn-toggle-mini" id="btnGyro" onclick="toggleGyroControl()" aria-label="Toggle Tilt Steering Motion Drive">OFF</button>
     </div>
   </div>
 
@@ -666,7 +666,7 @@
         </div>
       </div>
       <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0;">
-        <button class="btn-toggle-mini" style="background:rgba(255,0,85,0.25); border-color:var(--danger); color:var(--danger); font-weight:800; padding:6px 12px;" onclick="cancelActiveMission()">🛑 STAND DOWN</button>
+        <button class="btn-toggle-mini" style="background:rgba(255,0,85,0.25); border-color:var(--danger); color:var(--danger); font-weight:800; padding:6px 12px;" onclick="cancelActiveMission()" aria-label="Stand Down Autonomous Mission">🛑 STAND DOWN</button>
         <div style="font-size:0.75rem; font-weight:800; color:var(--neon-amber); font-family:monospace;" id="activeMissionTimer">⏱️ 00:00</div>
       </div>
     </div>
@@ -674,19 +674,19 @@
 
   <!-- 🌟 THE 4 ASTROMECH COMPANION TABS: 🚀 PILOT • 🛡️ PROTECT • 👁️ DISCOVER • 🎉 CELEBRATE -->
   <div class="studio-tabs">
-    <button class="tab-btn active" id="tabBtn1" onclick="switchTab(1)">
+    <button class="tab-btn active" id="tabBtn1" onclick="switchTab(1)" aria-label="Pilot Tab: Drive and Face Controls">
       <span>🚀 PILOT</span>
       <span style="font-size:0.58rem;">Drive & Face</span>
     </button>
-    <button class="tab-btn" id="tabBtn2" onclick="switchTab(2)">
+    <button class="tab-btn" id="tabBtn2" onclick="switchTab(2)" aria-label="Protect Tab: Sentry and Patrol Modes">
       <span>🛡️ PROTECT</span>
       <span style="font-size:0.58rem;">Sentry & Patrol</span>
     </button>
-    <button class="tab-btn" id="tabBtn3" onclick="switchTab(3)">
+    <button class="tab-btn" id="tabBtn3" onclick="switchTab(3)" aria-label="Discover Tab: Vision AI and Camera Intelligence">
       <span>👁️ DISCOVER</span>
       <span style="font-size:0.58rem;">Vision AI & 4K</span>
     </button>
-    <button class="tab-btn" id="tabBtn4" onclick="switchTab(4)">
+    <button class="tab-btn" id="tabBtn4" onclick="switchTab(4)" aria-label="Celebrate Tab: Games and Astromech Music">
       <span>🎉 CELEBRATE</span>
       <span style="font-size:0.58rem;">Games & Music</span>
     </button>
@@ -714,26 +714,26 @@
         <span style="font-size:0.75rem; font-weight:800; color:var(--neon-cyan);">⚡ SPEED THROTTLE</span>
         <span id="speedSliderLabel" style="font-size:0.68rem; font-weight:800; color:var(--neon-green);">55% • 🚗 Balanced Cruise</span>
       </div>
-      <input type="range" min="30" max="100" value="55" id="speedSlider" style="width:100%; accent-color:var(--neon-cyan); cursor:pointer;" oninput="onSpeedSliderChange(this.value)">
+      <input type="range" min="15" max="100" value="55" id="speedSlider" style="width:100%; accent-color:var(--neon-cyan); cursor:pointer;" oninput="onSpeedSliderChange(this.value)" aria-label="Speed Throttle Slider">
       <div style="width:100%; display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:6px;">
-        <button class="btn-toggle-mini" id="gear1" onclick="shiftGear(1, 'q')">♟️ Classical (38%)</button>
-        <button class="btn-toggle-mini active" id="gear2" onclick="shiftGear(2, 'w')">⏱️ Rapid (65%)</button>
-        <button class="btn-toggle-mini" id="gear3" onclick="shiftGear(3, 'e')">⚡ Blitz (100%)</button>
+        <button class="btn-toggle-mini" id="gear1" onclick="shiftGear(1, 'q')" aria-label="Gear 1 Classical Precision 38%">♟️ Classical (38%)</button>
+        <button class="btn-toggle-mini active" id="gear2" onclick="shiftGear(2, 'w')" aria-label="Gear 2 Rapid Cruise 65%">⏱️ Rapid (65%)</button>
+        <button class="btn-toggle-mini" id="gear3" onclick="shiftGear(3, 'e')" aria-label="Gear 3 Blitz Turbo 100%">⚡ Blitz (100%)</button>
       </div>
     </div>
 
     <!-- 📯 HORN, KNIGHT'S L-MOVE & BRAKE -->
     <div style="width:100%; display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:8px;">
-      <button class="btn-toggle-mini" style="border-color:var(--neon-amber); color:var(--neon-amber); padding:8px 0; font-size:0.7rem;" onclick="honkHorn()">📯 HORN</button>
-      <button class="btn-toggle-mini" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:8px 0; font-size:0.7rem;" onclick="triggerKnightLMove()">♞ L-MOVE</button>
-      <button class="btn-toggle-mini" style="border-color:var(--danger); color:var(--danger); padding:8px 0; font-size:0.7rem;" onclick="emergencyStop()">🛑 BRAKE</button>
+      <button class="btn-toggle-mini" style="border-color:var(--neon-amber); color:var(--neon-amber); padding:8px 0; font-size:0.7rem;" onclick="honkHorn()" aria-label="Honk Horn">📯 HORN</button>
+      <button class="btn-toggle-mini" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:8px 0; font-size:0.7rem;" onclick="triggerKnightLMove()" aria-label="Knight L-Move Maneuver">♞ L-MOVE</button>
+      <button class="btn-toggle-mini" id="btnEmergencyBrake" style="border-color:var(--danger); color:var(--danger); padding:8px 0; font-size:0.7rem; min-height:48px; display:flex; align-items:center; justify-content:center;" onclick="emergencyStop()" aria-label="Emergency Brake">🛑 BRAKE</button>
     </div>
 
     <!-- 🎨 DRAW ON DROID FACE -->
     <div class="pixel-matrix-card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
         <span style="font-size:0.75rem; font-weight:800; color:var(--neon-green);">🎨 DRAW ON DROID FACE</span>
-        <button class="btn-toggle-mini" style="font-size:0.6rem; padding:3px 8px;" onclick="clearPixelPad()">CLEAR</button>
+        <button class="btn-toggle-mini" style="font-size:0.6rem; padding:3px 8px;" onclick="clearPixelPad()" aria-label="Clear Face Pixel Grid">CLEAR</button>
       </div>
       <div class="pixel-grid" id="pixelGrid"></div>
       <div style="font-size:0.58rem; color:var(--subtext); text-align:center; margin-top:4px;">Tap squares to light up LEDs on S2-R2-D2's face in real-time!</div>
@@ -790,7 +790,7 @@
         <span style="font-size:0.75rem; font-weight:800; color:var(--neon-cyan);">⚡ PATROL SPEED</span>
         <span id="speedSliderLabel2" style="font-size:0.68rem; font-weight:800; color:var(--neon-green);">55% • ⏱️ Rapid Cruise</span>
       </div>
-      <input type="range" min="30" max="100" value="55" id="speedSlider2" style="width:100%; accent-color:var(--neon-cyan); cursor:pointer;" oninput="onSpeedSliderChange(this.value)">
+      <input type="range" min="15" max="100" value="55" id="speedSlider2" style="width:100%; accent-color:var(--neon-cyan); cursor:pointer;" oninput="onSpeedSliderChange(this.value)" aria-label="Patrol Speed Controller">
       <div style="display:flex; justify-content:space-between; font-size:0.58rem; color:var(--subtext); margin-top:2px;">
         <span>♟️ 38% (Classical)</span>
         <span>⏱️ 65% (Rapid)</span>
@@ -904,8 +904,8 @@
         <span style="font-size:0.75rem; font-weight:800; color:var(--neon-purple);">👁️ SMART CAMERA & CHESS ARBITER</span>
         <div style="display:flex; gap:4px; align-items:center;">
           <span class="armed-badge" id="cortexBadge">🟢 READY</span>
-          <button class="btn-toggle-mini" style="font-size:0.62rem; padding:4px 8px;" onclick="cycleVideoInput()">🔄 CAM</button>
-          <button class="btn-toggle-mini" style="font-size:0.62rem; padding:4px 8px; border-color:var(--neon-amber); color:var(--neon-amber);" onclick="toggleQuikScreenCapture()">📺 GOPRO</button>
+          <button class="btn-toggle-mini" style="font-size:0.62rem; padding:4px 8px;" onclick="cycleVideoInput()" aria-label="Cycle Video Input Camera">🔄 CAM</button>
+          <button class="btn-toggle-mini" style="font-size:0.62rem; padding:4px 8px; border-color:var(--neon-amber); color:var(--neon-amber);" onclick="toggleQuikScreenCapture()" aria-label="Toggle GoPro Screen Capture">📺 GOPRO</button>
         </div>
       </div>
 
@@ -936,8 +936,8 @@
 
       <!-- INPUT & CHESS CONTROLS -->
       <div class="cortex-controls" style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-        <button class="btn-toggle-mini" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:8px 0;" onclick="executeRealGeminiVisionGoal()">🎯 FIND & DRIVE</button>
-        <button class="btn-toggle-mini" style="border-color:var(--neon-green); color:var(--neon-green); padding:8px 0;" onclick="analyzePhysicalChessboard()">♟️ SCAN CHESSBOARD</button>
+        <button class="btn-toggle-mini" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:8px 0;" onclick="executeRealGeminiVisionGoal()" aria-label="Find and Drive to Target">🎯 FIND & DRIVE</button>
+        <button class="btn-toggle-mini" style="border-color:var(--neon-green); color:var(--neon-green); padding:8px 0;" onclick="analyzePhysicalChessboard()" aria-label="Scan Physical Chessboard">♟️ SCAN CHESSBOARD</button>
       </div>
       <input type="text" class="cortex-input" id="aiGoalInput" placeholder="Type target to find (e.g. 'Find my mug', 'Find blue keys')">
 
@@ -945,15 +945,15 @@
       <div style="background:var(--card-bg); border:1.5px solid rgba(255, 190, 11, 0.4); border-radius:14px; padding:10px 12px; margin-top:10px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="font-size:0.75rem; font-weight:800; color:var(--neon-amber);">👑 ROYAL EXECUTIVE BRIEFING</span>
-          <button class="btn-toggle-mini" style="border-color:var(--neon-amber); color:var(--neon-amber); font-size:0.62rem; padding:4px 10px; background:rgba(255,190,11,0.15);" onclick="triggerRoyalBriefing()">⚡ RUN BRIEFING</button>
+          <button class="btn-toggle-mini" style="border-color:var(--neon-amber); color:var(--neon-amber); font-size:0.62rem; padding:4px 10px; background:rgba(255,190,11,0.15);" onclick="triggerRoyalBriefing()" aria-label="Run Royal Executive Briefing">⚡ RUN BRIEFING</button>
         </div>
         <div style="font-size:0.62rem; color:var(--subtext); margin-bottom:6px;" id="briefingStatusText">S2-R2-D2 queries live weather & time, speaks your tactical debrief, and animates its face!</div>
         
         <!-- 🎙️ VOCAL GEMINI CORTEX ("ASK S2-R2-D2 ANYTHING") -->
         <div style="display:flex; gap:6px; width:100%; margin-top:4px;">
           <input type="text" class="cortex-input" id="askGeminiInput" placeholder="Ask S2-R2-D2 anything (e.g. 'Chess advice', 'Weather outlook')">
-          <button class="btn-toggle-mini" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:0 12px;" onclick="askGeminiVocalBrain()">ASK 🧠</button>
-          <button class="btn-toggle-mini" style="border-color:var(--neon-green); color:var(--neon-green); padding:0 10px;" onclick="listenVoiceToAskGemini()">🎙️</button>
+          <button class="btn-toggle-mini" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:0 12px;" onclick="askGeminiVocalBrain()" aria-label="Ask Gemini AI Cortex">ASK 🧠</button>
+          <button class="btn-toggle-mini" style="border-color:var(--neon-green); color:var(--neon-green); padding:0 10px;" onclick="listenVoiceToAskGemini()" aria-label="Microphone Voice Input">🎙️</button>
         </div>
       </div>
     </div>
@@ -982,10 +982,10 @@
         <span style="font-size:0.6rem; color:var(--neon-cyan);">Interactive Sentience</span>
       </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-        <button class="btn-toggle-mini" style="border-color:var(--neon-amber); color:var(--neon-amber); padding:8px 0; font-size:0.7rem;" onclick="triggerMood('Y', '🌟 Astromech Bliss & Ecstasy Arpeggio!')">🌟 ECSTASY</button>
-        <button class="btn-toggle-mini" style="border-color:var(--neon-green); color:var(--neon-green); padding:8px 0; font-size:0.7rem;" onclick="triggerMood('A', '✅ R2-D2 Excited Affirmative Yes!')">✅ SAY YES</button>
-        <button class="btn-toggle-mini" style="border-color:var(--danger); color:var(--danger); padding:8px 0; font-size:0.7rem;" onclick="triggerMood('D', '😠 Irritated Grumpy Mechanical Grunt!')">😠 GRUMPY</button>
-        <button class="btn-toggle-mini" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:8px 0; font-size:0.7rem;" onclick="triggerMood('C', '😴 Drowsy Fatigued Power-down Sigh...')">😴 FATIGUED</button>
+        <button class="btn-toggle-mini" style="border-color:var(--neon-amber); color:var(--neon-amber); padding:8px 0; font-size:0.7rem;" onclick="triggerMood('Y', '🌟 Astromech Bliss & Ecstasy Arpeggio!')" aria-label="Ecstasy Mood Expression">🌟 ECSTASY</button>
+        <button class="btn-toggle-mini" style="border-color:var(--neon-green); color:var(--neon-green); padding:8px 0; font-size:0.7rem;" onclick="triggerMood('A', '✅ R2-D2 Excited Affirmative Yes!')" aria-label="Say Yes Affirmative Mood Expression">✅ SAY YES</button>
+        <button class="btn-toggle-mini" style="border-color:var(--danger); color:var(--danger); padding:8px 0; font-size:0.7rem;" onclick="triggerMood('D', '😠 Irritated Grumpy Mechanical Grunt!')" aria-label="Grumpy Mood Expression">😠 GRUMPY</button>
+        <button class="btn-toggle-mini" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:8px 0; font-size:0.7rem;" onclick="triggerMood('C', '😴 Drowsy Fatigued Power-down Sigh...')" aria-label="Fatigued Mood Expression">😴 FATIGUED</button>
       </div>
     </div>
 
@@ -1025,14 +1025,14 @@
       <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(0,242,254,0.25); border-radius:10px; padding:8px 10px; margin-bottom:8px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
           <span style="font-size:0.68rem; font-weight:800; color:var(--neon-cyan);">🎧 EAR TRAINING: GUESS THE CODE</span>
-          <button class="btn-toggle-mini" style="font-size:0.6rem; padding:4px 10px; background:rgba(0,242,254,0.2); border-color:var(--neon-cyan);" onclick="playMorseQuizRound()">🔊 PLAY SECRET CODE</button>
+          <button class="btn-toggle-mini" style="font-size:0.6rem; padding:4px 10px; background:rgba(0,242,254,0.2); border-color:var(--neon-cyan);" onclick="playMorseQuizRound()" aria-label="Play Secret Morse Code Quiz">🔊 PLAY SECRET CODE</button>
         </div>
         <div style="font-size:0.62rem; color:var(--neon-amber); text-align:center; margin-bottom:6px;" id="morseQuizHint">Tap 'PLAY SECRET CODE' — S2-R2-D2 will beep & blink a letter!</div>
         <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;" id="morseQuizOptions">
-          <button class="btn-spy-preset" onclick="checkMorseAnswer('E')">E (•)</button>
-          <button class="btn-spy-preset" onclick="checkMorseAnswer('T')">T (—)</button>
-          <button class="btn-spy-preset" onclick="checkMorseAnswer('S')">S (•••)</button>
-          <button class="btn-spy-preset" onclick="checkMorseAnswer('O')">O (———)</button>
+          <button class="btn-spy-preset" onclick="checkMorseAnswer('E')" aria-label="Guess Letter E">E (•)</button>
+          <button class="btn-spy-preset" onclick="checkMorseAnswer('T')" aria-label="Guess Letter T">T (—)</button>
+          <button class="btn-spy-preset" onclick="checkMorseAnswer('S')" aria-label="Guess Letter S">S (•••)</button>
+          <button class="btn-spy-preset" onclick="checkMorseAnswer('O')" aria-label="Guess Letter O">O (———)</button>
         </div>
       </div>
 
@@ -1042,20 +1042,20 @@
           <span style="font-size:0.68rem; font-weight:800; color:var(--neon-green);">🔘 TELEGRAPH TAP KEY</span>
           <span style="font-size:0.62rem; color:var(--neon-cyan); font-weight:700;" id="telegraphDecoded">Decoded: --</span>
         </div>
-        <button class="btn-connect" id="btnTelegraphKey" style="width:100%; height:44px; background:linear-gradient(135deg, rgba(0,245,212,0.15), rgba(0,242,254,0.25)); border-color:var(--neon-green); font-size:0.75rem; font-weight:800; letter-spacing:0.5px; user-select:none;" onpointerdown="onTelegraphDown()" onpointerup="onTelegraphUp()">🔘 HOLD / TAP TELEGRAPH KEY</button>
+        <button class="btn-connect" id="btnTelegraphKey" style="width:100%; height:44px; background:linear-gradient(135deg, rgba(0,245,212,0.15), rgba(0,242,254,0.25)); border-color:var(--neon-green); font-size:0.75rem; font-weight:800; letter-spacing:0.5px; user-select:none;" onpointerdown="onTelegraphDown()" onpointerup="onTelegraphUp()" aria-label="Tactile Telegraph Key">🔘 HOLD / TAP TELEGRAPH KEY</button>
       </div>
 
       <!-- 🕵️ 3. SECRET BROADCASTER -->
       <div style="display:flex; gap:6px; width:100%; margin-bottom:6px;">
         <input type="text" class="cortex-input" id="spyMsgInput" placeholder="Type secret word (e.g. 'SOS', 'KING')">
-        <button class="btn-toggle-mini" onclick="transmitCustomSpyMessage()">BEEP</button>
+        <button class="btn-toggle-mini" onclick="transmitCustomSpyMessage()" aria-label="Transmit Morse Code Message">BEEP</button>
       </div>
 
       <div class="spy-presets">
-        <button class="btn-spy-preset" onclick="sendPresetSpyMsg('SOS')">🆘 SOS</button>
-        <button class="btn-spy-preset" onclick="sendPresetSpyMsg('R2D2')">🛸 R2-D2</button>
-        <button class="btn-spy-preset" onclick="sendPresetSpyMsg('KING')">👑 KING</button>
-        <button class="btn-spy-preset" onclick="sendPresetSpyMsg('HELLO')">👋 HELLO</button>
+        <button class="btn-spy-preset" onclick="sendPresetSpyMsg('SOS')" aria-label="Transmit Morse Preset SOS">🆘 SOS</button>
+        <button class="btn-spy-preset" onclick="sendPresetSpyMsg('R2D2')" aria-label="Transmit Morse Preset R2D2">🛸 R2-D2</button>
+        <button class="btn-spy-preset" onclick="sendPresetSpyMsg('KING')" aria-label="Transmit Morse Preset King">👑 KING</button>
+        <button class="btn-spy-preset" onclick="sendPresetSpyMsg('HELLO')" aria-label="Transmit Morse Preset Hello">👋 HELLO</button>
       </div>
     </div>
 
@@ -1085,10 +1085,10 @@
 
     <!-- 🎶 MUSIC JUKEBOX -->
     <div class="jukebox-grid">
-      <button class="btn-song" onclick="playSong('J1', '🌌 Star Wars')">🌌 Star Wars</button>
-      <button class="btn-song" onclick="playSong('J2', '🤖 R2 Chirp')">🤖 R2 Chirp</button>
-      <button class="btn-song" onclick="playSong('J3', '🍄 Mario')">🍄 Mario</button>
-      <button class="btn-song" onclick="playSong('J4', '🕶️ Spy Theme')">🕶️ Spy Theme</button>
+      <button class="btn-song" onclick="playSong('J1', '🌌 Star Wars')" aria-label="Play Star Wars Theme">🌌 Star Wars</button>
+      <button class="btn-song" onclick="playSong('J2', '🤖 R2 Chirp')" aria-label="Play R2 Chirp">🤖 R2 Chirp</button>
+      <button class="btn-song" onclick="playSong('J3', '🍄 Mario')" aria-label="Play Mario Theme">🍄 Mario</button>
+      <button class="btn-song" onclick="playSong('J4', '🕶️ Spy Theme')" aria-label="Play Spy Theme">🕶️ Spy Theme</button>
     </div>
   </div>
 
@@ -1097,11 +1097,25 @@
 
   <script>
     // 🛡️ GLOBAL COCKPIT ERROR HANDLER (Surfaces any runtime syntax/reference bug immediately to HUD)
-    window.onerror = function(msg, url, line) {
-      console.error("[Cockpit Error]", msg, "at line", line);
+    window.onerror = function(msg, url, line, col, error) {
+      console.error("[Cockpit Error]", msg, "at line", line, "col", col, error);
       const hud = document.getElementById("hudLog");
       if (hud) hud.innerText = `[ERROR: L${line}] ${msg}`;
+      return false;
     };
+
+    window.onunhandledrejection = function(event) {
+      const reason = event.reason ? (event.reason.message || event.reason) : "Unknown rejection";
+      console.error("[Unhandled Promise Rejection]", event.reason);
+      const hud = document.getElementById("hudLog");
+      if (hud) hud.innerText = `[PROMISE ERR] ${reason}`;
+    };
+
+    function getGeminiApiKey() {
+      return typeof CortexAPI !== 'undefined' 
+        ? CortexAPI.getApiKey() 
+        : (localStorage.getItem('s2r2d2_gemini_api_key') || '');
+    }
 
     const SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
     const CHAR_UUID    = "0000ffe1-0000-1000-8000-00805f9b34fb";
@@ -1137,16 +1151,14 @@
         const clean = input.trim();
         localStorage.setItem('s2r2d2_pilot_name', clean);
         document.getElementById('pilotCallsignLabel').innerText = clean;
-        if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+        if (bluetoothDevice && bluetoothDevice.gatt && bluetoothDevice.gatt.connected) {
           document.getElementById("btStatus").innerText = `👑 ${clean} • Linked to S2-R2-D2`;
         }
       }
     }
 
     function promptSetApiKey() {
-      const current = typeof CortexAPI !== 'undefined' 
-        ? CortexAPI.getApiKey() 
-        : (localStorage.getItem('s2r2d2_gemini_api_key') || '');
+      const current = getGeminiApiKey();
       const input = prompt("🔑 Enter your Google Gemini API Key (Stored locally in your browser only):", current);
       if (input !== null) {
         const clean = input.trim();
@@ -1192,7 +1204,9 @@
           else if (type === 'medium') navigator.vibrate(28);
           else if (type === 'heavy') navigator.vibrate([35, 30, 35]);
           else if (type === 'double') navigator.vibrate([15, 25, 15]);
-        } catch(e) {}
+        } catch(e) {
+          console.debug("Haptic error:", e);
+        }
       }
     }
 
@@ -1241,11 +1255,19 @@
     }
 
     function emergencyStop() {
-      triggerHaptic('heavy');
+      // 🛑 SAFETY FIRST: Invalidate drive heartbeat and active touch state immediately
       stopDriveHeartbeat();
-      gAiVisionAborted = true;
       lastFlowCmd = 'S';
+      isTouchingPad = false;
       sendCommand("S");
+
+      // Reset controls & trigger feedback
+      gAiVisionAborted = true;
+      flowThumb.style.left = "50%";
+      flowThumb.style.top  = "50%";
+      const vecLabel = document.getElementById("flowVectorLabel");
+      if (vecLabel) vecLabel.innerText = "Center [0, 0]";
+      triggerHaptic('heavy');
       document.getElementById("hudLog").innerText = "[STOP] 🛑 Emergency Brake Engaged!";
     }
 
@@ -1342,18 +1364,19 @@
     }
 
     function handlePadRelease() {
-      if (isTouchingPad) {
-        isTouchingPad = false;
-        stopDriveHeartbeat();
-        if (lastFlowCmd !== 'S') {
-          lastFlowCmd = 'S';
-          sendCommand('S'); // 🛑 Bumper Stop sent FIRST!
-        }
-        triggerHaptic('light');
-        flowThumb.style.left = "50%";
-        flowThumb.style.top  = "50%";
-        document.getElementById("flowVectorLabel").innerText = "Center [0, 0]";
+      // 🛑 SAFETY FIRST: Terminate heartbeat and force stop state immediately
+      stopDriveHeartbeat();
+      const wasActive = isTouchingPad || lastFlowCmd !== 'S';
+      isTouchingPad = false;
+      lastFlowCmd = 'S';
+      if (wasActive) {
+        sendCommand('S'); // Stop packet sent FIRST before UI/DOM mutations
       }
+      flowThumb.style.left = "50%";
+      flowThumb.style.top  = "50%";
+      const vecLabel = document.getElementById("flowVectorLabel");
+      if (vecLabel) vecLabel.innerText = "Center [0, 0]";
+      triggerHaptic('light');
     }
 
     flowPad.addEventListener("pointerdown", (e) => { 
@@ -1370,20 +1393,42 @@
     window.addEventListener("pointercancel", handlePadRelease);
 
     // 🛑 BACKGROUND SAFETY AUTO-STOP (Tab switched / phone sleep / lost focus)
-    window.addEventListener("blur", () => {
+    function handleBackgroundStop() {
       stopDriveHeartbeat();
-      if (lastFlowCmd !== 'S') {
-        lastFlowCmd = 'S';
+      const wasActive = isTouchingPad || lastFlowCmd !== 'S';
+      isTouchingPad = false;
+      lastFlowCmd = 'S';
+      if (wasActive) {
         sendCommand('S');
       }
-    });
+      flowThumb.style.left = "50%";
+      flowThumb.style.top  = "50%";
+      const vecLabel = document.getElementById("flowVectorLabel");
+      if (vecLabel) vecLabel.innerText = "Center [0, 0]";
+    }
+
+    function stopCamera() {
+      const video = document.getElementById("cameraStream");
+      const placeholder = document.getElementById("cameraPlaceholder");
+      if (video && video.srcObject) {
+        try {
+          video.srcObject.getTracks().forEach(t => t.stop());
+        } catch(e) {
+          console.warn("Camera track stop error:", e);
+        }
+        video.srcObject = null;
+      }
+      if (video) video.style.display = "none";
+      if (placeholder) placeholder.style.display = "block";
+      cameraActive = false;
+    }
+
+    window.addEventListener("blur", handleBackgroundStop);
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
-        stopDriveHeartbeat();
-        if (lastFlowCmd !== 'S') {
-          lastFlowCmd = 'S';
-          sendCommand('S');
-        }
+        handleBackgroundStop();
+        stopCamera();
+        stopVoiceRecognition();
       }
     });
 
@@ -1448,14 +1493,18 @@
           placeholder.style.display = "none";
           cameraActive = true;
           document.getElementById("hudLog").innerText = "[GOPRO] Live GoPro Stream Linked!";
+
+          stream.getVideoTracks().forEach(track => {
+            track.onended = () => {
+              stopCamera();
+              document.getElementById("hudLog").innerText = "[GOPRO] Screen capture stream ended.";
+            };
+          });
         } catch(err) {
           document.getElementById("hudLog").innerText = "[GOPRO ERROR] " + err.message;
         }
       } else {
-        if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
-        video.style.display = "none";
-        placeholder.style.display = "block";
-        cameraActive = false;
+        stopCamera();
       }
     }
 
@@ -2089,14 +2138,29 @@
       }
     }
 
+    let activeVoiceRecognizer = null;
+
+    function stopVoiceRecognition() {
+      if (activeVoiceRecognizer) {
+        try {
+          activeVoiceRecognizer.abort();
+        } catch (e) {
+          console.warn("Abort voice recognition error:", e);
+        }
+        activeVoiceRecognizer = null;
+      }
+    }
+
     function listenVoiceToAskGemini() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
         alert("Speech Recognition not supported in this browser. Please type your query!");
         return;
       }
+      stopVoiceRecognition();
       triggerHaptic('light');
       const recognizer = new SpeechRecognition();
+      activeVoiceRecognizer = recognizer;
       recognizer.lang = 'en-US';
       recognizer.interimResults = false;
       
@@ -2109,18 +2173,38 @@
       };
       
       recognizer.onerror = (e) => {
+        console.warn("Speech recognition error:", e);
         document.getElementById("hudLog").innerText = `[VOICE AI] Error: ${e.error}`;
+      };
+
+      recognizer.onend = () => {
+        if (activeVoiceRecognizer === recognizer) {
+          activeVoiceRecognizer = null;
+        }
       };
       
       recognizer.start();
     }
 
     // ========================================================================
-    // ⌛ GRANDMASTER POMODORO DESK SENTRY ENGINE
+    // ⌛ GRANDMASTER POMODORO DESK SENTRY ENGINE (DECOUPLED FROM HARDWARE MODES)
     // ========================================================================
     let pomodoroActive = false;
     let pomodoroTimer = null;
     let pomodoroTimeLeft = 25 * 60; // 25 minutes
+
+    function stopPomodoro() {
+      if (pomodoroActive || pomodoroTimer) {
+        clearInterval(pomodoroTimer);
+        pomodoroTimer = null;
+        pomodoroActive = false;
+        const btn = document.getElementById("btnPomodoroAction");
+        const card = document.querySelector('[data-mode="P"]');
+        if (btn) btn.innerText = "FOCUS";
+        if (card) card.classList.remove("mission-active-card");
+        document.getElementById("hudLog").innerText = "[POMODORO] 🛑 Focus Sentry Disengaged.";
+      }
+    }
 
     function togglePomodoroSentry() {
       pomodoroActive = !pomodoroActive;
@@ -2133,7 +2217,9 @@
         if (btn) btn.innerText = "RUNNING 🟢";
         if (card) card.classList.add("mission-active-card");
         
-        triggerMode('7', "⌛ Pomodoro Focus Sentry Active: 25m Deep Work timer started!");
+        // Decoupled from hardware mode 7: shows FOCUS on LED face with zero motor movement!
+        sendCommand("@ FOCUS \n");
+        document.getElementById("hudLog").innerText = "[POMODORO] ⌛ Focus Sentry Active: 25m Deep Work timer started!";
 
         clearInterval(pomodoroTimer);
         pomodoroTimer = setInterval(() => {
@@ -2146,23 +2232,20 @@
           
           if (pomodoroTimeLeft <= 0) {
             clearInterval(pomodoroTimer);
+            pomodoroTimer = null;
             pomodoroActive = false;
             if (btn) btn.innerText = "FOCUS";
             if (card) card.classList.remove("mission-active-card");
             
             // Celebration on work complete!
-            sendCommand("J3"); // Super Mario Fanfare
+            sendCommand("J3\n"); // Super Mario Fanfare
             speakVocalMessage("Great work King Shivansh! 25 minutes of deep focus completed. Time for a well-deserved break!");
             sendCommand("W BREAK TIME \n");
           }
         }, 1000);
       } else {
         triggerHaptic('medium');
-        clearInterval(pomodoroTimer);
-        if (btn) btn.innerText = "FOCUS";
-        if (card) card.classList.remove("mission-active-card");
-        cancelActiveMission();
-        document.getElementById("hudLog").innerText = "[POMODORO] 🛑 Focus Sentry Disengaged.";
+        stopPomodoro();
       }
     }
 
@@ -2216,16 +2299,22 @@
         try {
           await serialWriter.write(data);
           return;
-        } catch(e) {}
+        } catch(e) {
+          console.warn("Pixel matrix USB TX error:", e);
+        }
       }
       if (rxTxChar) {
         try {
           if (rxTxChar.writeValueWithoutResponse) {
             await rxTxChar.writeValueWithoutResponse(data);
-          } else {
+          } else if (rxTxChar.writeValueWithResponse) {
+            await rxTxChar.writeValueWithResponse(data);
+          } else if (rxTxChar.writeValue) {
             await rxTxChar.writeValue(data);
           }
-        } catch(e) {}
+        } catch(e) {
+          console.warn("Pixel matrix BLE TX error:", e);
+        }
       }
     }
 
@@ -2233,6 +2322,16 @@
       const hud = document.getElementById("hudLog");
       if (!navigator.bluetooth) {
         alert("Web Bluetooth requires Chrome on Android/Mac or Bluefy on iOS.");
+        return;
+      }
+
+      // If already connected, toggle disconnect cleanly
+      if (bluetoothDevice && bluetoothDevice.gatt && bluetoothDevice.gatt.connected) {
+        try {
+          bluetoothDevice.gatt.disconnect();
+        } catch(err) {
+          console.warn("BLE disconnect error:", err);
+        }
         return;
       }
 
@@ -2267,6 +2366,18 @@
     }
 
     function onDisconnected() {
+      rxTxChar = null;
+      bluetoothDevice = null;
+
+      stopDriveHeartbeat();
+      stopGyroHeartbeat();
+      stopMissionKeepalive();
+
+      lastFlowCmd = 'S';
+      isTouchingPad = false;
+      bleWriteQueue = [];
+      isBleWriting = false;
+
       document.getElementById("btDot").classList.remove("online");
       document.getElementById("btStatus").innerText = "Droid Offline";
       if (document.getElementById("statusSubLabel")) document.getElementById("statusSubLabel").innerText = "Astromech Droid Companion";
@@ -2294,6 +2405,15 @@
           await serialPort.close();
           serialPort = null;
           isUsbConnected = false;
+
+          stopDriveHeartbeat();
+          stopGyroHeartbeat();
+          stopMissionKeepalive();
+          lastFlowCmd = 'S';
+          isTouchingPad = false;
+          bleWriteQueue = [];
+          isBleWriting = false;
+
           document.getElementById("btDot").classList.remove("online");
           document.getElementById("btStatus").innerText = "Droid Offline";
           if (document.getElementById("statusSubLabel")) document.getElementById("statusSubLabel").innerText = "Astromech Droid Companion";
@@ -2340,43 +2460,152 @@
       }
     }
 
-    async function sendCommand(cmd) {
-      const data = new TextEncoder().encode(cmd);
-      // 1. USB Serial Transport (Wired Mac Desktop Link)
-      if (isUsbConnected && serialWriter) {
-        try {
-          await serialWriter.write(data);
-          return;
-        } catch (err) {
-          console.error("USB TX Error:", err);
-        }
-      }
-      // 2. Web Bluetooth Transport (Wireless Floor Rover)
-      if (rxTxChar) {
-        try {
-          if (rxTxChar.writeValueWithoutResponse) {
-            try {
-              await rxTxChar.writeValueWithoutResponse(data);
-              return;
-            } catch(e) {}
+    // ========================================================================
+    // 📡 SERIALIZED COMMAND TRANSMISSION PIPELINE (BLE / USB DUAL-LINK)
+    // ========================================================================
+    let bleWriteQueue = [];
+    let isBleWriting = false;
+
+    function isMotionCommand(cmd) {
+      if (!cmd || typeof cmd !== 'string') return false;
+      const c = cmd.charAt(0);
+      return c === 'F' || c === 'B' || c === 'L' || c === 'R' || 
+             c === 'f' || c === 'b' || c === 'l' || c === 'r' || 
+             c === 'q' || c === 'w' || c === 'e' || c === 'S' || c === 's';
+    }
+
+    function sanitizeAscii(str) {
+      return str.replace(/°[CF]?/g, 'C')
+                .replace(/[^\x20-\x7E\n]/g, '');
+    }
+
+    async function processWriteQueue() {
+      if (isBleWriting) return;
+      if (bleWriteQueue.length === 0) return;
+
+      isBleWriting = true;
+      while (bleWriteQueue.length > 0) {
+        const item = bleWriteQueue.shift();
+        const { data, retries, resolve } = item;
+        let success = false;
+
+        for (let attempt = 0; attempt <= retries; attempt++) {
+          try {
+            if (isUsbConnected && serialWriter) {
+              await serialWriter.write(data);
+              success = true;
+              break;
+            } else if (rxTxChar) {
+              if (data.length <= 20) {
+                if (rxTxChar.writeValueWithoutResponse) {
+                  try {
+                    await rxTxChar.writeValueWithoutResponse(data);
+                    success = true;
+                    break;
+                  } catch (e) {
+                    // Fallback to withResponse
+                  }
+                }
+                if (rxTxChar.writeValueWithResponse) {
+                  await rxTxChar.writeValueWithResponse(data);
+                  success = true;
+                  break;
+                } else if (rxTxChar.writeValue) {
+                  await rxTxChar.writeValue(data);
+                  success = true;
+                  break;
+                }
+              } else {
+                // Chunk payloads > 20 bytes into <= 20-byte slices with 15ms spacing
+                for (let offset = 0; offset < data.length; offset += 20) {
+                  const slice = data.slice(offset, offset + 20);
+                  if (rxTxChar.writeValueWithoutResponse) {
+                    try {
+                      await rxTxChar.writeValueWithoutResponse(slice);
+                    } catch (e) {
+                      if (rxTxChar.writeValueWithResponse) await rxTxChar.writeValueWithResponse(slice);
+                      else if (rxTxChar.writeValue) await rxTxChar.writeValue(slice);
+                    }
+                  } else if (rxTxChar.writeValueWithResponse) {
+                    await rxTxChar.writeValueWithResponse(slice);
+                  } else if (rxTxChar.writeValue) {
+                    await rxTxChar.writeValue(slice);
+                  }
+                  if (offset + 20 < data.length) {
+                    await new Promise(r => setTimeout(r, 15));
+                  }
+                }
+                success = true;
+                break;
+              }
+            } else {
+              break;
+            }
+          } catch (err) {
+            console.warn(`[TX Retry ${attempt + 1}]`, err);
+            if (attempt < retries) {
+              await new Promise(r => setTimeout(r, 20));
+            }
           }
-          if (rxTxChar.writeValueWithResponse) {
-            await rxTxChar.writeValueWithResponse(data);
-          } else if (rxTxChar.writeValue) {
-            await rxTxChar.writeValue(data);
-          }
-        } catch (err) {
-          console.error("BLE TX Error:", err);
         }
+
+        resolve(success);
+        await new Promise(r => setTimeout(r, 10));
       }
+      isBleWriting = false;
+    }
+
+    function sendCommand(rawCmd) {
+      return new Promise((resolve) => {
+        let cmd = rawCmd;
+        if (typeof cmd === 'string') {
+          const first = cmd.charAt(0);
+          if (['T', 'J', 'M', '@', 'W', '#', 'P'].includes(first)) {
+            if (!cmd.endsWith('\n')) cmd += '\n';
+          }
+          if (first === '@' || first === 'W') {
+            cmd = sanitizeAscii(cmd);
+          }
+        }
+
+        const data = (typeof cmd === 'string') ? new TextEncoder().encode(cmd) : cmd;
+        const isMotion = typeof cmd === 'string' && isMotionCommand(cmd);
+        const isStop = typeof cmd === 'string' && (cmd === 'S' || cmd.startsWith('S'));
+
+        if (isStop) {
+          // 🛑 EMERGENCY BRAKE PRIORITY: Discard any pending motion commands instantly!
+          bleWriteQueue = bleWriteQueue.filter(item => {
+            if (item.isMotion) {
+              item.resolve(false);
+              return false;
+            }
+            return true;
+          });
+          bleWriteQueue.unshift({ data, isMotion: true, retries: 2, resolve });
+        } else if (isMotion) {
+          // Coalesce motion commands
+          bleWriteQueue = bleWriteQueue.filter(item => {
+            if (item.isMotion) {
+              item.resolve(false);
+              return false;
+            }
+            return true;
+          });
+          bleWriteQueue.push({ data, isMotion: true, retries: 1, resolve });
+        } else {
+          bleWriteQueue.push({ data, isMotion: false, retries: 1, resolve });
+        }
+
+        processWriteQueue();
+      });
     }
 
     let throttleDebounceTimer = null;
     function onSpeedSliderChange(val) {
       triggerHaptic('light');
       const percent = parseInt(val);
-      // Map 20% -> 95 PWM (Safe indoor crawl), 50% -> 155 PWM (Cruise), 100% -> 255 PWM (Turbo)
-      const pwm = Math.min(255, Math.max(80, Math.round(55 + (percent / 100) * 200)));
+      // Map 15% -> 68 PWM (Safe indoor crawl), 55% -> 156 PWM (Cruise), 100% -> 255 PWM (Turbo)
+      const pwm = Math.min(255, Math.max(65, Math.round(35 + (percent / 100) * 220)));
       
       let label = `${percent}% • `;
       if (percent <= 45) label += "♟️ Classical (Precision Calm)";
@@ -2444,8 +2673,28 @@
       if (patrolEl) patrolEl.innerText = `${mins}m ${secs}s`;
     }
 
+    let missionKeepaliveTimer = null;
+    function startMissionKeepalive() {
+      stopMissionKeepalive();
+      missionKeepaliveTimer = setInterval(() => {
+        if (currentActiveMission && (rxTxChar || isUsbConnected)) {
+          sendCommand('!');
+        } else {
+          stopMissionKeepalive();
+        }
+      }, 600);
+    }
+
+    function stopMissionKeepalive() {
+      if (missionKeepaliveTimer) {
+        clearInterval(missionKeepaliveTimer);
+        missionKeepaliveTimer = null;
+      }
+    }
+
     async function triggerMode(modeChar, desc) {
       triggerHaptic('double');
+      stopPomodoro();
 
       // If already running this exact mission, disengage cleanly
       if (currentActiveMission === modeChar) {
@@ -2457,6 +2706,7 @@
       missionStartTime = Date.now();
       
       await sendCommand(modeChar);
+      startMissionKeepalive();
 
       // 1. Show Global Active Mission Banner
       const hud = document.getElementById("activeMissionHud");
@@ -2514,6 +2764,8 @@
       triggerHaptic('heavy');
       currentActiveMission = null;
       clearInterval(missionTimerInterval);
+      stopMissionKeepalive();
+      stopPomodoro();
 
       await sendCommand('S'); // Stop robot and return to RC mode
 
@@ -2550,7 +2802,32 @@
       document.getElementById("hudLog").innerText = `[MUSIC] S2-R2-D2 Playing ${songName} on onboard speaker...` + (isMasterMuted ? " (🔇 Muted • Tap SOUND to hear)" : "");
     }
 
+    // ========================================================================
+    // 📱 TILT STEERING ENGINE (CALIBRATED ACCELEROMETER DRIVE)
+    // ========================================================================
     let lastGyroCmd = 'S';
+    let gyroHeartbeatTimer = null;
+    let baselineBeta = null;
+    let baselineGamma = null;
+
+    function stopGyroHeartbeat() {
+      if (gyroHeartbeatTimer) {
+        clearInterval(gyroHeartbeatTimer);
+        gyroHeartbeatTimer = null;
+      }
+    }
+
+    function startGyroHeartbeat() {
+      stopGyroHeartbeat();
+      gyroHeartbeatTimer = setInterval(() => {
+        if (gyroActive && (rxTxChar || isUsbConnected) && lastGyroCmd !== 'S') {
+          sendCommand(lastGyroCmd);
+        } else {
+          stopGyroHeartbeat();
+        }
+      }, 120);
+    }
+
     function toggleGyroControl() {
       gyroActive = !gyroActive;
       const btn = document.getElementById("btnGyro");
@@ -2558,36 +2835,62 @@
       btn.innerText = gyroActive ? "ON" : "OFF";
 
       if (gyroActive) {
+        baselineBeta = null;
+        baselineGamma = null;
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
           DeviceOrientationEvent.requestPermission()
             .then(perm => {
               if (perm === 'granted') window.addEventListener('deviceorientation', handleOrientation);
+            })
+            .catch(err => {
+              console.warn("DeviceOrientation permission error:", err);
             });
         } else {
           window.addEventListener('deviceorientation', handleOrientation);
         }
-        document.getElementById("hudLog").innerText = "[TILT STEER] Lean phone in any direction to drive!";
+        document.getElementById("hudLog").innerText = "[TILT STEER] Calibrating neutral angle... Hold phone steady!";
       } else {
         window.removeEventListener('deviceorientation', handleOrientation);
+        stopGyroHeartbeat();
+        lastGyroCmd = 'S';
         sendCommand('S');
+        document.getElementById("hudLog").innerText = "[TILT STEER] Deactivated.";
       }
     }
 
     function handleOrientation(e) {
-      if (!gyroActive || !rxTxChar) return;
-      const gamma = e.gamma;
-      const beta  = e.beta;
+      if (!gyroActive || (!rxTxChar && !isUsbConnected)) return;
+      if (e.beta === null || e.gamma === null) return;
+
+      if (baselineBeta === null || baselineGamma === null) {
+        baselineBeta = e.beta;
+        baselineGamma = e.gamma;
+        document.getElementById("hudLog").innerText = "[TILT STEER] Baseline calibrated. Tilt phone to drive!";
+        return;
+      }
+
+      const dBeta = e.beta - baselineBeta;
+      const dGamma = e.gamma - baselineGamma;
 
       let targetCmd = 'S';
-      if (beta > 35) targetCmd = 'B';
-      else if (beta < 10) targetCmd = 'F';
-      else if (gamma < -20) targetCmd = 'L';
-      else if (gamma > 20) targetCmd = 'R';
-      else targetCmd = 'S';
+      // Deadband of +/- 15 degrees
+      if (Math.abs(dBeta) > 15 || Math.abs(dGamma) > 15) {
+        if (Math.abs(dBeta) >= Math.abs(dGamma)) {
+          // Tilt forward (down) decreases beta on phones, tilt back increases beta
+          targetCmd = dBeta < -15 ? 'F' : 'B';
+        } else {
+          targetCmd = dGamma < -15 ? 'L' : 'R';
+        }
+      }
 
       if (targetCmd !== lastGyroCmd) {
         lastGyroCmd = targetCmd;
         sendCommand(targetCmd);
+        if (targetCmd !== 'S') {
+          startGyroHeartbeat();
+        } else {
+          stopGyroHeartbeat();
+        }
       }
     }
 
