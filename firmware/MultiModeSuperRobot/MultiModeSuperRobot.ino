@@ -2607,12 +2607,14 @@ uint16_t getFilteredDistance() {
   return gFollowFilteredDist;
 }
 
+// Reads the ONE photocell that is actually wired: the LDR on A0 (kPinLdrFollow).
+// The old version took max() over A2/A3/A6/A7 — all unconnected expansion pins,
+// which float and return noise, so the theremin (mode 8) tracked nothing real.
+// Polarity assumption: higher ADC == brighter, matching Follow Me's convention
+// (currentLdr > 250 == "optical beacon", ldrDelta > 4 == "brightness rising").
+// If a future LDR module is wired inverted, flip here and in sampleLdrWithHealth().
 int readActivePhotocell() {
-  int rawA2 = analogRead(kPinExpansionA2);
-  int rawA3 = analogRead(kPinExpansionA3);
-  int rawA6 = analogRead(kPinExpansionA6);
-  int rawA7 = analogRead(kPinExpansionA7);
-  return max(max(rawA2, rawA3), max(rawA6, rawA7));
+  return analogRead(kPinLdrFollow);
 }
 
 int sampleLdrWithHealth() {
