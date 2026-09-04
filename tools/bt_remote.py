@@ -66,6 +66,87 @@ async def discover_robot_device(timeout_seconds: float = 6.0) -> Optional[BLEDev
     return device
 
 
+def normalize_and_validate_command(raw: str) -> Optional[bytes]:
+    """
+    Validates user console input and frames multi-byte payloads with newline.
+    Rejects arbitrary raw strings (e.g. 'hello') to protect robot state machine.
+    """
+    cmd = raw.strip()
+    if not cmd:
+        return None
+
+    # Single-byte commands
+    if len(cmd) == 1:
+        c = cmd.upper()
+        # Motion & Emergency Brake
+        if c in {"S", "F", "B", "L", "R"}:
+            return c.encode("ascii")
+        # Gears (lowercase q, w, e)
+        if cmd in {"q", "w", "e"}:
+            return cmd.encode("ascii")
+        # Audio Mute / Unmute
+        if cmd in {"x", "X"}:
+            return cmd.encode("ascii")
+        # Autonomous Modes 0-9
+        if cmd in "0123456789":
+            return cmd.encode("ascii")
+        # Joy Greeting, Dances, Expressions & Diagnostics
+        if c in {"G", "K", "U", "H", "Z", "A", "Y", "D", "C", "?", "!", "*"}:
+            return c.encode("ascii")
+        return None
+
+    # Multi-byte commands (must be properly framed with newline \n)
+    prefix = cmd[0].upper()
+    rest = cmd[1:].strip()
+
+    # Throttle: P <pwm> or P<pwm> (0-255)
+    if prefix == "P":
+        if rest.isdigit() and 0 <= int(rest) <= 255:
+            return f"P{rest}\n".encode("ascii")
+        return None
+
+    # Jukebox: J <1-4> or J<1-4>
+    if prefix == "J":
+        if rest in {"1", "2", "3", "4"}:
+            return f"J{rest}\n".encode("ascii")
+        return None
+
+    # Text Banner: W <text>
+    if prefix == "W":
+        clean_text = "".join(ch for ch in rest if 32 <= ord(ch) <= 126)
+        if clean_text:
+            return f"W{clean_text}\n".encode("ascii")
+        return None
+
+    # Clock / Focus Banner: @ <text>
+    if cmd[0] == "@":
+        clean_text = "".join(ch for ch in rest if 32 <= ord(ch) <= 126)
+        if clean_text:
+            return f"@{clean_text}\n".encode("ascii")
+        return None
+
+    # Quiz Symbol: T <symbol>
+    if prefix == "T":
+        if len(rest) >= 1:
+            clean_sym = rest[0].upper()
+            return f"T{clean_sym}\n".encode("ascii")
+        return None
+
+    return None
+
+
+async def create_async_stdin_reader() -> asyncio.StreamReader:
+    """
+    Creates a non-blocking asynchronous StreamReader connected to sys.stdin.
+    Avoids thread executor blocking and allows instant cancellation.
+    """
+    reader = asyncio.StreamReader()
+    protocol = asyncio.StreamReaderProtocol(reader)
+    loop = asyncio.get_running_loop()
+    await loop.connect_read_pipe(lambda: protocol, sys.stdin)
+    return reader
+
+
 async def run_controller_session() -> None:
     """
     Main asynchronous event loop managing the BLE GATT lifecycle and keyboard dispatch.
@@ -87,49 +168,58 @@ async def run_controller_session() -> None:
         print(f"[✔] GATT Link Established! (Connected: {client.is_connected})")
         print("-" * 58)
         print(" COMMAND DISPATCH MATRIX:")
-        print("   q / w / e : Shift Gear (1: Precision | 2: Cruise | 3: Turbo)")
+        print("   q / w / e     : Shift Gear (1: Precision | 2: Cruise | 3: Turbo)")
         print("   F / B / L / R : Drive (Forward | Reverse | Left | Right)")
-        print("   S         : EMERGENCY BRAKE (0 PWM)")
-        print("   1 / 2 / 4 : Autonomous (1: Obstacle | 2: Line | 4: Music)")
-        print("   0         : Safe Standby Mode")
-        print("   exit      : Disconnect & Quit")
+        print("   S             : EMERGENCY BRAKE (0 PWM)")
+        print("   P <0-255>     : Set Throttle PWM (e.g. 'P 150')")
+        print("   J <1-4>       : Play Melody (1: Star Wars | 2: R2 | 3: Mario | 4: Spy)")
+        print("   W <text>      : Scroll Text Banner on Matrix Face")
+        print("   0 - 9         : Autonomous Modes (1: Obstacle | 2: Line | 5: Pet)")
+        print("   exit / quit   : Disconnect & Safe Halt")
         print("-" * 58)
 
         # Subscribe to UART notifications
         await client.start_notify(GATT_UART_CHAR_UUID, telemetry_rx_callback)
+        stdin_reader = await create_async_stdin_reader()
 
         try:
-            event_loop = asyncio.get_running_loop()
             while True:
-                try:
-                    raw_command = await event_loop.run_in_executor(None, input, "\nCockpit Command > ")
-                except EOFError:
+                sys.stdout.write("\nCockpit Command > ")
+                sys.stdout.flush()
+
+                line_bytes = await stdin_reader.readline()
+                if not line_bytes:
                     break
 
-                command = raw_command.strip()
-                if not command:
+                line = line_bytes.decode("utf-8", errors="replace").strip()
+                if not line:
                     continue
-                if command.lower() in ["exit", "quit"]:
+
+                if line.lower() in ["exit", "quit"]:
                     print("[*] Terminating wireless link...")
                     break
 
-                payload = command.encode("utf-8")
+                payload = normalize_and_validate_command(line)
+                if payload is None:
+                    print(f"[!] Rejected command '{line}'. Type valid command (e.g. F, B, L, R, S, q, w, e).")
+                    continue
+
                 await client.write_gatt_char(GATT_UART_CHAR_UUID, payload, response=False)
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.05)
         finally:
             try:
-                print("[*] Engaging safety halt 'S' before disconnect...")
+                print("\n[*] Safety Interlock: Engaging EMERGENCY BRAKE 'S' before disconnect...")
                 await client.write_gatt_char(GATT_UART_CHAR_UUID, b"S", response=False)
                 await asyncio.sleep(0.15)
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[-] Notice on disconnect brake: {exc}")
 
 
 def main() -> None:
     """Program entrypoint with clean signal handling."""
     try:
         asyncio.run(run_controller_session())
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, asyncio.CancelledError):
         print("\n[!] Program interrupted by user. Safety halt executed. Exited cleanly.")
 
 

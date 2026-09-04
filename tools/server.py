@@ -22,13 +22,18 @@ Key Features:
 
 import http.server
 import os
+import shutil
 import socket
 import ssl
+import subprocess
 import sys
+import tempfile
+from typing import Optional
 import qrcode
 
 PORT: int = 8443
-WEB_DIR: str = os.path.dirname(os.path.abspath(__file__))
+# Serve the web app root directory (where index.html resides) rather than tools/
+WEB_DIR: str = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 
 def get_local_ip_address() -> str:
@@ -47,6 +52,28 @@ def get_local_ip_address() -> str:
     finally:
         sock.close()
     return ip_addr
+
+
+def generate_ephemeral_ssl_context(temp_dir: str, ip_addr: str) -> Optional[ssl.SSLContext]:
+    """
+    Provisions an ephemeral self-signed TLS certificate using openssl in a temporary
+    directory isolated completely from WEB_DIR to prevent private key exposure over HTTP.
+    """
+    cert_path = os.path.join(temp_dir, "cert.pem")
+    key_path = os.path.join(temp_dir, "key.pem")
+    try:
+        cmd = [
+            "openssl", "req", "-x509", "-newkey", "rsa:2048",
+            "-nodes", "-out", cert_path, "-keyout", key_path,
+            "-days", "1", "-subj", f"/CN={ip_addr}"
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_context.load_cert_chain(certfile=cert_path, keyfile=key_path)
+        return ssl_context
+    except Exception as exc:
+        print(f"[!] Warning: Ephemeral SSL generation failed ({exc}).")
+        return None
 
 
 def print_cockpit_banner(url: str) -> None:
@@ -77,7 +104,7 @@ def print_cockpit_banner(url: str) -> None:
 
 def run_https_server() -> None:
     """
-    Initializes and starts the HTTPS daemon listening on 0.0.0.0:8443.
+    Initializes and starts the HTTPS daemon listening on 0.0.0.0:8443 serving the web app root.
     """
     local_ip = get_local_ip_address()
     url = f"https://{local_ip}:{PORT}"
@@ -87,20 +114,21 @@ def run_https_server() -> None:
     server_address = ('0.0.0.0', PORT)
     httpd = http.server.HTTPServer(server_address, http.server.SimpleHTTPRequestHandler)
 
-    cert_path = os.path.join(WEB_DIR, 'cert.pem')
-    key_path = os.path.join(WEB_DIR, 'key.pem')
+    temp_ssl_dir = tempfile.mkdtemp(prefix="s2r2d2_ssl_")
+    ssl_context = generate_ephemeral_ssl_context(temp_ssl_dir, local_ip)
 
-    if os.path.exists(cert_path) and os.path.exists(key_path):
-        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ssl_context.load_cert_chain(certfile=cert_path, keyfile=key_path)
+    if ssl_context:
         httpd.socket = ssl_context.wrap_socket(httpd.socket, server_side=True)
+        print(f"[✔] Secure TLS/SSL Context Active (Cert stored in private isolated tempdir: {temp_ssl_dir})")
     else:
-        print("[!] Warning: SSL certificate files not found. Serving plaintext HTTP.")
+        print("[!] Warning: Ephemeral SSL not available. Serving plaintext HTTP.")
 
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n[!] HTTPS server stopped cleanly.")
+    finally:
+        shutil.rmtree(temp_ssl_dir, ignore_errors=True)
         sys.exit(0)
 
 
