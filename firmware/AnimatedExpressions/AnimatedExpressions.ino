@@ -147,6 +147,7 @@ void loop() {
 
 void matrixInit() {
   Wire.begin();
+  Wire.setWireTimeout(3000, true);
   
   // Turn on system oscillator
   Wire.beginTransmission(MATRIX_I2C_ADDR);

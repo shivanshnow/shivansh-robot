@@ -31,6 +31,8 @@ const uint8_t kPinMotorLeftDir   = 8;
 const uint8_t kPinMotorLeftPwm   = 9;
 const uint8_t kPinMotorRightPwm  = 10;
 const uint8_t kPinMotorRightDir  = A1;
+const uint8_t kPinLineSensorLeft = A2;
+const uint8_t kPinLineSensorRight= A3;
 const uint8_t kPinStatusLed      = LED_BUILTIN;
 
 /* ============================================================================
@@ -43,6 +45,8 @@ const float   kSafeDistanceCm  = 25.0f; // Look-around threshold
 const float   kCriticalDistCm  = 12.0f; // Emergency reverse threshold
 
 bool gIsArmed = false; // Desk-safe arming state
+bool gSonarFault = false;
+uint8_t gSonarGoodCount = 0;
 
 /* ============================================================================
  * Function Prototypes
@@ -101,17 +105,51 @@ void loop() {
   }
 
   // Autonomous Navigation Loop
+  // 🛑 Cliff check first (Table edge safety guard)
+  uint8_t leftCliff  = digitalRead(kPinLineSensorLeft);
+  uint8_t rightCliff = digitalRead(kPinLineSensorRight);
+  if (leftCliff == 0 || rightCliff == 0) {
+    haltMotors();
+    playTone(400, 150);
+    driveBackward(kSpeedCruise);
+    for (unsigned long s = millis(); millis() - s < 280; delay(10)) {
+      if (Serial.available()) { haltMotors(); return; }
+    }
+    haltMotors();
+    pivotRight(kSpeedTurn);
+    for (unsigned long s = millis(); millis() - s < 320; delay(10)) {
+      if (Serial.available()) { haltMotors(); return; }
+    }
+    haltMotors();
+    return;
+  }
+
   float dist = getDistanceCm();
+  if (Serial.available()) { haltMotors(); return; }
+
+  // FAIL-SAFE: If sensor wire is disconnected or timed out, halt immediately!
+  if (gSonarFault || dist <= 0.0f) {
+    haltMotors();
+    playTone(300, 80);
+    delay(50);
+    return;
+  }
 
   // Critical Zone: Emergency Reverse & Pivot
   if (dist > 0.0f && dist < kCriticalDistCm) {
     haltMotors();
     playTone(450, 80);
     driveBackward(kSpeedCruise);
-    delay(300);
+    for (unsigned long s = millis(); millis() - s < 300; delay(10)) {
+      if (Serial.available() || digitalRead(kPinLineSensorLeft) == 0 || digitalRead(kPinLineSensorRight) == 0) {
+        haltMotors(); return;
+      }
+    }
     haltMotors();
     pivotRight(kSpeedTurn);
-    delay(400);
+    for (unsigned long s = millis(); millis() - s < 400; delay(10)) {
+      if (Serial.available()) { haltMotors(); return; }
+    }
     haltMotors();
   }
   // Warning Zone: Look-Around Spatial Scan
@@ -121,29 +159,41 @@ void loop() {
 
     // Look Left
     pivotLeft(kSpeedTurn);
-    delay(350);
+    for (unsigned long s = millis(); millis() - s < 350; delay(10)) {
+      if (Serial.available()) { haltMotors(); return; }
+    }
     haltMotors();
     delay(100);
     float leftDist = getDistanceCm();
+    if (Serial.available()) { haltMotors(); return; }
 
     // Look Right
     pivotRight(kSpeedTurn);
-    delay(700);
+    for (unsigned long s = millis(); millis() - s < 700; delay(10)) {
+      if (Serial.available()) { haltMotors(); return; }
+    }
     haltMotors();
     delay(100);
     float rightDist = getDistanceCm();
+    if (Serial.available()) { haltMotors(); return; }
 
     // Pivot toward free corridor
     if (leftDist > rightDist && leftDist > kSafeDistanceCm) {
       pivotLeft(kSpeedTurn);
-      delay(700);
+      for (unsigned long s = millis(); millis() - s < 700; delay(10)) {
+        if (Serial.available()) { haltMotors(); return; }
+      }
       haltMotors();
     }
   }
-  // Clear Corridor: Forward Cruise
+  // Clear Corridor: Forward Cruise (Cliff Guarded)
   else {
-    driveForward(kSpeedCruise);
-    delay(40);
+    if (digitalRead(kPinLineSensorLeft) != 0 && digitalRead(kPinLineSensorRight) != 0) {
+      driveForward(kSpeedCruise);
+      delay(40);
+    } else {
+      haltMotors();
+    }
   }
 }
 
@@ -160,6 +210,9 @@ void setupHardware() {
 
   pinMode(kPinUltrasonicTrig, OUTPUT);
   pinMode(kPinUltrasonicEcho, INPUT);
+
+  pinMode(kPinLineSensorLeft, INPUT);
+  pinMode(kPinLineSensorRight, INPUT);
 
   pinMode(kPinBuzzer1, OUTPUT);
   pinMode(kPinBuzzer2, OUTPUT);
@@ -211,7 +264,15 @@ float getDistanceCm() {
   digitalWrite(kPinUltrasonicTrig, LOW);
 
   unsigned long duration = pulseIn(kPinUltrasonicEcho, HIGH, 25000UL);
-  if (duration == 0UL) return 0.0f; // 🛑 0.0f signifies timeout/disconnect fault
+  if (duration == 0UL) {
+    gSonarFault = true;
+    gSonarGoodCount = 0;
+    return 0.0f; // 🛑 0.0f signifies timeout/disconnect fault
+  }
+  gSonarGoodCount++;
+  if (gSonarGoodCount >= 5) {
+    gSonarFault = false;
+  }
   return (float)duration / 58.0f;
 }
 

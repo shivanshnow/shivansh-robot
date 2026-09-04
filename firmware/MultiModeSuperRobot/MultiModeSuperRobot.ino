@@ -93,17 +93,19 @@ enum DialoguePhrase {
 };
 
 volatile RobotMode gCurrentMode = MODE_BLUETOOTH_RC;
-volatile SpeedGear gCurrentGear = GEAR_CRUISE;
+volatile SpeedGear gCurrentGear = GEAR_PRECISION;
 volatile bool gMasterMute = false; // Default to Sound Enabled!
 
-uint8_t gDriveSpeed = 180;
-uint8_t gTurnSpeed  = 160;
+uint8_t gDriveSpeed = 120;
+uint8_t gTurnSpeed  = 110;
 
-// Safety Watchdog & Deadman Timer (350ms timeout)
+// Safety Watchdog & Deadman Timer (400ms RC deadman, 1500ms autonomous keepalive)
 unsigned long gLastMotionCmdTime = 0;
+volatile unsigned long gLastKeepaliveTime = 0;
 bool gMotorActive = false;
 uint8_t gSonarGoodCount = 0;
 bool gSonarFault = false;
+uint8_t gLineSweepStep = 0;
 
 // Filter State
 float gFollowFilteredDist = 20.0f;
@@ -334,13 +336,6 @@ void playMissionImpossible();
  */
 void loadEepromSettings() {
   if (EEPROM.read(EEPROM_MAGIC_ADDR) == EEPROM_MAGIC_VAL) {
-    uint8_t savedGear = EEPROM.read(EEPROM_GEAR_ADDR);
-    // 🛡️ Safety Boot Clamp: Power up in Precision or Cruise, never Turbo (prevents surprise sprint)
-    if (savedGear == (uint8_t)GEAR_PRECISION || savedGear == (uint8_t)GEAR_CRUISE) {
-      gCurrentGear = (SpeedGear)savedGear;
-    } else {
-      gCurrentGear = GEAR_PRECISION;
-    }
     gMasterMute = (EEPROM.read(EEPROM_MUTE_ADDR) == 1);
   } else {
     // Initialize EEPROM default signature on first boot
@@ -350,6 +345,9 @@ void loadEepromSettings() {
     uint16_t zeroRuns = 0;
     EEPROM.put(EEPROM_RUNS_ADDR, zeroRuns);
   }
+  // 🛡️ Safety Boot Clamp (H5): Always boot to PRECISION on every power-up!
+  gCurrentGear = GEAR_PRECISION;
+
   // Increment lifetime mission counter
   uint16_t missionCount = 0;
   EEPROM.get(EEPROM_RUNS_ADDR, missionCount);
@@ -367,13 +365,14 @@ void saveEepromMute(bool m) {
 
 void setup() {
   Serial.begin(9600);
-  Serial.setTimeout(15); // Fast non-blocking 15ms stream timeout (Prevents parser stall!)
+  Serial.setTimeout(50); // Bounded 50ms stream timeout for framed commands (Prevents parser stall!)
   randomSeed(analogRead(A0) ^ analogRead(A2) ^ (uint16_t)micros()); // True hardware entropy
   setupHardware();
   loadEepromSettings();
-  setGear(gCurrentGear);
+  setGear(GEAR_PRECISION);
   setMode(MODE_BLUETOOTH_RC);
   gLastIdleChirpTime = millis();
+  gLastKeepaliveTime = millis();
 }
 
 void loop() {
@@ -433,7 +432,10 @@ void setMode(RobotMode newMode) {
   gCurrentMode = newMode;
   haltMotors();
   stopAllAudio();
+  gMotorActive = false;
   gLastIdleChirpTime = millis();
+  gLastKeepaliveTime = millis();
+  gLineSweepStep = 0;
 
   if (newMode == MODE_LIVING_PET) {
     gFollowLockAcquired = false;
@@ -539,48 +541,60 @@ void checkControlInput() {
     else if (ch == 'U' || ch == 'u') {
       runSpinTheDroidRoulette();
     }
-    // 9. Morse Code Academy Broadcaster ('T' + letter/dit/dah)
+    // 9. Morse Code Academy Broadcaster ('T' + letter/dit/dah + '\n')
     else if (ch == 'T' || ch == 't') {
-      char letter = 0;
-      unsigned long tStart = millis();
-      while (millis() - tStart < 35) {
-        if (Serial.available()) { letter = Serial.read(); break; }
+      gLastKeepaliveTime = millis();
+      char tBuf[8];
+      size_t n = Serial.readBytesUntil('\n', tBuf, sizeof(tBuf) - 1);
+      tBuf[n] = '\0';
+      if (n > 0) {
+        char letter = tBuf[0];
+        if (letter == '.') playMorseDit();
+        else if (letter == '-') playMorseDah();
+        else playMorseLetter(letter);
       }
-      if (letter == '.') playMorseDit();
-      else if (letter == '-') playMorseDah();
-      else if (letter != 0) playMorseLetter(letter);
     }
-    // 10. Chiptune Jukebox Payloads ('J' + 1-4) (Guarded Payload Isolation)
+    // 10. Chiptune Jukebox Payloads ('J' + 1-4 + '\n') (Guarded Payload Isolation)
     else if (ch == 'J' || ch == 'j') {
-      char song = 0;
-      unsigned long jStart = millis();
-      while (millis() - jStart < 35) {
-        if (Serial.available()) {
-          song = Serial.read();
-          break;
-        }
-      }
+      gLastKeepaliveTime = millis();
       haltMotors();
       gMotorActive = false;
-      if (song == '1') playStarWars();
-      else if (song == '2') playR2D2Chirps();
-      else if (song == '3') playSuperMario();
-      else if (song == '4') playMissionImpossible();
-      // Any invalid or timed out character is absorbed cleanly (NEVER dispatched to setMode)
+      char jBuf[8];
+      size_t n = Serial.readBytesUntil('\n', jBuf, sizeof(jBuf) - 1);
+      jBuf[n] = '\0';
+      if (n > 0) {
+        char song = jBuf[0];
+        if (song == '1') playStarWars();
+        else if (song == '2') playR2D2Chirps();
+        else if (song == '3') playSuperMario();
+        else if (song == '4') playMissionImpossible();
+      }
     }
-    // 11. Live 8x8 Pixel Art Streaming ('M' + 8 bytes with timeout discard)
+    // 11. Live 8x8 Pixel Art Streaming ('M' + 16 hex chars + '\n')
     else if (ch == 'M' || ch == 'm') {
+      gLastKeepaliveTime = millis();
+      char mBuf[24];
+      size_t n = Serial.readBytesUntil('\n', mBuf, sizeof(mBuf) - 1);
+      mBuf[n] = '\0';
       uint8_t customBuf[8];
-      bool valid = true;
-      for (int i = 0; i < 8; i++) {
-        unsigned long startWait = millis();
-        while (!Serial.available() && (millis() - startWait < 40));
-        if (Serial.available()) {
-          customBuf[i] = Serial.read();
-        } else {
-          valid = false;
-          customBuf[i] = 0;
+      bool valid = false;
+      if (n == 16) {
+        valid = true;
+        for (int i = 0; i < 8; i++) {
+          char hCh = mBuf[i * 2];
+          char lCh = mBuf[i * 2 + 1];
+          int h = (hCh >= '0' && hCh <= '9') ? (hCh - '0') :
+                  (hCh >= 'A' && hCh <= 'F') ? (hCh - 'A' + 10) :
+                  (hCh >= 'a' && hCh <= 'f') ? (hCh - 'a' + 10) : -1;
+          int l = (lCh >= '0' && lCh <= '9') ? (lCh - '0') :
+                  (lCh >= 'A' && lCh <= 'F') ? (lCh - 'A' + 10) :
+                  (lCh >= 'a' && lCh <= 'f') ? (lCh - 'a' + 10) : -1;
+          if (h < 0 || l < 0) { valid = false; break; }
+          customBuf[i] = (uint8_t)((h << 4) | l);
         }
+      } else if (n == 8) {
+        for (int i = 0; i < 8; i++) customBuf[i] = (uint8_t)mBuf[i];
+        valid = true;
       }
       if (valid) {
         displayCustomBuffer(customBuf);
@@ -588,23 +602,23 @@ void checkControlInput() {
           tone(kPinBuzzer1, random(1400, 2200)); delay(12);
           noTone(kPinBuzzer1);
         }
-      } else {
-        // Discard any straggler bytes from incomplete frame to prevent rogue motion triggers!
-        while (Serial.available() > 0) { Serial.read(); }
       }
     }
     // 12. Sonic Horn (Dual R2-D2 Astromech Chirp Blast!)
     else if (ch == 'h' || ch == 'H') {
+      gLastKeepaliveTime = millis();
       chirpSweep(1800, 1100, 90, 3);
       delay(20);
       chirpSweep(1300, 2400, 110, 3);
     }
     // 13. Gemini Vision AI Target Lock-On ('V')
     else if (ch == 'V' || ch == 'v') {
+      gLastKeepaliveTime = millis();
       chirpVisionLock();
     }
     // 14. Real-time Variable Speed Throttle ('P' + digits) - NON-BLOCKING & DISCARD-SAFE
     else if (ch == 'P' || ch == 'p') {
+      gLastKeepaliveTime = millis();
       int targetSpeed = 0;
       unsigned long pStart = millis();
       while (millis() - pStart < 25) {
@@ -625,70 +639,94 @@ void checkControlInput() {
     }
     // 15. Grandmaster Knight L-Path Maneuver ('Z')
     else if (ch == 'Z' || ch == 'z') {
+      gLastKeepaliveTime = millis();
       runKnightLPathManeuver();
     }
-    // 16. Dedicated Real-Time Face Clock ('@' + time string + '\n') - 100% SILENT & ZERO MOTOR MOVEMENT
+    // 16. Dedicated Real-Time Face Clock ('@' + time string + '\n') - Fixed buffer, zero malloc
     else if (ch == '@') {
+      gLastKeepaliveTime = millis();
       haltMotors();
       gCurrentMode = MODE_BLUETOOTH_RC;
-      
-      unsigned long startWait = millis();
-      while (!Serial.available() && (millis() - startWait < 150));
-      String timeStr = Serial.readStringUntil('\n');
-      timeStr.trim();
-      
-      if (timeStr.length() > 0) {
+      char clockBanner[24];
+      size_t n = Serial.readBytesUntil('\n', clockBanner, sizeof(clockBanner) - 1);
+      clockBanner[n] = '\0';
+      char* p = clockBanner;
+      while (*p == ' ' || *p == '\r' || *p == '\t') p++;
+      int endIdx = (int)strlen(p) - 1;
+      while (endIdx >= 0 && (p[endIdx] == ' ' || p[endIdx] == '\r' || p[endIdx] == '\t')) {
+        p[endIdx--] = '\0';
+      }
+      if (strlen(p) > 0) {
         char banner[32];
-        snprintf(banner, sizeof(banner), " %s ", timeStr.c_str());
+        snprintf(banner, sizeof(banner), " %s ", p);
         haltMotors();
         scrollTextAcrossMatrix(banner, 45);
         haltMotors();
         displayBitmap(kIconCrown);
       }
     }
-    // 17. Text Marquee Banner Streamer ('W' + string + '\n')
+    // 17. Text Marquee Banner Streamer ('W' + string + '\n') - Fixed buffer, zero malloc
     else if (ch == 'W') {
+      gLastKeepaliveTime = millis();
       haltMotors();
-      unsigned long startWait = millis();
-      while (!Serial.available() && (millis() - startWait < 150));
-      String txt = Serial.readStringUntil('\n');
-      txt.trim();
-      if (txt.length() > 0) {
+      char textBanner[24];
+      size_t n = Serial.readBytesUntil('\n', textBanner, sizeof(textBanner) - 1);
+      textBanner[n] = '\0';
+      char* p = textBanner;
+      while (*p == ' ' || *p == '\r' || *p == '\t') p++;
+      int endIdx = (int)strlen(p) - 1;
+      while (endIdx >= 0 && (p[endIdx] == ' ' || p[endIdx] == '\r' || p[endIdx] == '\t')) {
+        p[endIdx--] = '\0';
+      }
+      if (strlen(p) > 0) {
         char banner[32];
-        snprintf(banner, sizeof(banner), " %s ", txt.c_str());
+        snprintf(banner, sizeof(banner), " %s ", p);
         scrollTextAcrossMatrix(banner, 45);
         displayBitmap(kIconCrown);
       }
     }
-    // 18. Serene Static 8x8 Digital Clock ('#' + "HHMM\n")
+    // 18. Serene Static 8x8 Digital Clock ('#' + "HHMM\n") - Validated digits & clamped
     else if (ch == '#') {
+      gLastKeepaliveTime = millis();
       haltMotors();
       gCurrentMode = MODE_BLUETOOTH_RC;
-      unsigned long startWait = millis();
-      while (!Serial.available() && (millis() - startWait < 150));
-      String timeDigits = Serial.readStringUntil('\n');
-      timeDigits.trim();
-      if (timeDigits.length() >= 4) {
-        int hh = (timeDigits[0] - '0') * 10 + (timeDigits[1] - '0');
-        int mm = (timeDigits[2] - '0') * 10 + (timeDigits[3] - '0');
-        displayStaticClock(hh, mm, true);
+      char timeDigits[12];
+      size_t n = Serial.readBytesUntil('\n', timeDigits, sizeof(timeDigits) - 1);
+      timeDigits[n] = '\0';
+      char* p = timeDigits;
+      while (*p == ' ' || *p == '\r' || *p == '\t') p++;
+      if (strlen(p) >= 4 && isdigit(p[0]) && isdigit(p[1]) && isdigit(p[2]) && isdigit(p[3])) {
+        int hh = (p[0] - '0') * 10 + (p[1] - '0');
+        int mm = (p[2] - '0') * 10 + (p[3] - '0');
+        hh = constrain(hh, 0, 23);
+        mm = constrain(mm, 0, 59);
+        displayStaticClock((uint8_t)hh, (uint8_t)mm, true);
       }
     }
-    // 17. Astromech Emotional Expressions (A=Yes, Y=Ecstasy, D=Grumpy, C=Fatigued)
+    // 19. Client Keepalive Pulse ('!' or '*')
+    else if (ch == '!' || ch == '*') {
+      gLastKeepaliveTime = millis();
+    }
+    // 20. Astromech Emotional Expressions (A=Yes, Y=Ecstasy, D=Grumpy, C=Fatigued)
     else if (ch == 'A' || ch == 'a') {
+      gLastKeepaliveTime = millis();
       runSayingYesMood();
     }
     else if (ch == 'Y' || ch == 'y') {
+      gLastKeepaliveTime = millis();
       runEcstasyMood();
     }
     else if (ch == 'D' || ch == 'd') {
+      gLastKeepaliveTime = millis();
       runGrumpyMood();
     }
     else if (ch == 'C' || ch == 'c') {
+      gLastKeepaliveTime = millis();
       runFatiguedMood();
     }
-    // 18. Telemetry & EEPROM Diagnostics Query ('?')
+    // 21. Telemetry & EEPROM Diagnostics Query ('?')
     else if (ch == '?') {
+      gLastKeepaliveTime = millis();
       uint16_t missionCount = 0;
       EEPROM.get(EEPROM_RUNS_ADDR, missionCount);
       Serial.print(F("S2-R2-D2|GEAR:"));
@@ -702,11 +740,21 @@ void checkControlInput() {
 }
 
 void executeCurrentMode() {
-  // 🛑 HOISTED UNIVERSAL DEADMAN WATCHDOG: If in RC mode and heartbeat drops > 400ms, auto-brake!
-  if (gCurrentMode == MODE_BLUETOOTH_RC) {
-    if (gMotorActive && (millis() - gLastMotionCmdTime > 400)) {
-      haltMotors();
-      gMotorActive = false;
+  // 🛑 HOISTED UNIVERSAL DEADMAN WATCHDOG: Evaluated every iteration across all modes!
+  if (gMotorActive) {
+    if (gCurrentMode == MODE_BLUETOOTH_RC) {
+      if (millis() - gLastMotionCmdTime > 400) {
+        haltMotors();
+        gMotorActive = false;
+      }
+    } else if (gCurrentMode != MODE_STANDBY) {
+      // Autonomous modes require active client keepalive within 1500ms
+      if (millis() - gLastKeepaliveTime > 1500) {
+        haltMotors();
+        gMotorActive = false;
+        setMode(MODE_BLUETOOTH_RC);
+        displayBitmap(kIconBrake);
+      }
     }
   }
 
@@ -738,22 +786,25 @@ void runStandbyMode() {
 }
 
 void runObstacleMode() {
+  const uint8_t kAutoDriveSpeed = 175;
+  const uint8_t kAutoTurnSpeed  = 160;
+
   // 🛑 CLIFF DETECTION FIRST (Table edge safety guard)
   uint8_t leftCliff = digitalRead(kPinLineSensorLeft);
   uint8_t rightCliff = digitalRead(kPinLineSensorRight);
   if (leftCliff == 0 || rightCliff == 0) {
     haltMotors();
     talkAstromech(EMOTION_ALERT);
-    driveBackward(gDriveSpeed); delay(280); haltMotors();
-    pivotRight(gTurnSpeed); delay(320); haltMotors();
+    driveBackward(kAutoDriveSpeed); delay(280); haltMotors();
+    pivotRight(kAutoTurnSpeed); delay(320); haltMotors();
     return;
   }
 
   float dist = getDistanceCm();
-  if (Serial.available()) return;
+  if (Serial.available()) { haltMotors(); return; }
 
-  // FAIL-SAFE: If sensor wire is disconnected, halt immediately instead of driving blind!
-  if (gSonarFault) {
+  // FAIL-SAFE: If sensor wire is disconnected, timed out, or faulted, halt immediately!
+  if (gSonarFault || dist <= 0.0f) {
     haltMotors();
     displayBitmap(kIconBrake);
     if (millis() % 1200 < 60) talkAstromech(EMOTION_ALERT);
@@ -765,10 +816,10 @@ void runObstacleMode() {
   if (dist > 0.0f && dist < 18.0f) {
     haltMotors();
     talkAstromech(EMOTION_ALERT); // Startled reflex chirp!
-    driveBackward(gDriveSpeed);
+    driveBackward(kAutoDriveSpeed);
     delay(280);
     haltMotors();
-    pivotRight(gTurnSpeed);
+    pivotRight(kAutoTurnSpeed);
     delay(320);
     haltMotors();
   }
@@ -777,7 +828,7 @@ void runObstacleMode() {
     haltMotors();
     talkDialogue(PHRASE_HESITATION); // Inquisitive "Hmm... checking path options"
     displayBitmap(kArrowLeft);
-    pivotLeft(gTurnSpeed);
+    pivotLeft(kAutoTurnSpeed);
     delay(260);
     haltMotors();
     delay(50);
@@ -786,7 +837,7 @@ void runObstacleMode() {
     delay(30);
 
     displayBitmap(kArrowRight);
-    pivotRight(gTurnSpeed);
+    pivotRight(kAutoTurnSpeed);
     delay(520);
     haltMotors();
     delay(50);
@@ -796,7 +847,7 @@ void runObstacleMode() {
 
     if (leftDist > rightDist && leftDist > 30.0f) {
       displayBitmap(kArrowLeft);
-      pivotLeft(gTurnSpeed);
+      pivotLeft(kAutoTurnSpeed);
       delay(520);
       haltMotors();
     }
@@ -804,12 +855,15 @@ void runObstacleMode() {
   // 3. Clear Path Forward
   else {
     displayBitmap(kArrowForward);
-    driveForward(gDriveSpeed);
+    driveForward(kAutoDriveSpeed);
     delay(25);
   }
 }
 
 void runLineTrackingMode() {
+  const uint8_t kAutoDriveSpeed = 175;
+  const uint8_t kAutoTurnSpeed  = 160;
+
   uint8_t leftSensor  = digitalRead(kPinLineSensorLeft);
   uint8_t rightSensor = digitalRead(kPinLineSensorRight);
 
@@ -819,41 +873,47 @@ void runLineTrackingMode() {
     lastRacingPip = millis();
   }
 
+  if (Serial.available()) { haltMotors(); return; }
+
   // 1. Smooth Differential Steering (Eliminates violent bang-bang wobble)
   if (leftSensor == 0 && rightSensor == 1) {
+    gLineSweepStep = 0;
+    gMotorActive = true;
     displayBitmap(kArrowLeft);
-    analogWrite(kPinMotorLeftPwm, gDriveSpeed / 3);
-    analogWrite(kPinMotorRightPwm, gTurnSpeed);
+    analogWrite(kPinMotorLeftPwm, kAutoDriveSpeed / 3);
+    analogWrite(kPinMotorRightPwm, kAutoTurnSpeed);
     digitalWrite(kPinMotorLeftDir, LOW);
     digitalWrite(kPinMotorRightDir, LOW);
   } else if (leftSensor == 1 && rightSensor == 0) {
+    gLineSweepStep = 0;
+    gMotorActive = true;
     displayBitmap(kArrowRight);
-    analogWrite(kPinMotorLeftPwm, gTurnSpeed);
-    analogWrite(kPinMotorRightPwm, gDriveSpeed / 3);
+    analogWrite(kPinMotorLeftPwm, kAutoTurnSpeed);
+    analogWrite(kPinMotorRightPwm, kAutoDriveSpeed / 3);
     digitalWrite(kPinMotorLeftDir, LOW);
     digitalWrite(kPinMotorRightDir, LOW);
   } else if (leftSensor == 1 && rightSensor == 1) {
     // 2. Off track (both sensors off line) -> 2-Micro-Sweep recovery
-    static uint8_t sweepStep = 0;
-    if (sweepStep == 0) {
-      pivotLeft(gTurnSpeed); delay(140); haltMotors(); delay(40);
-      sweepStep = 1;
-    } else if (sweepStep == 1) {
-      pivotRight(gTurnSpeed); delay(280); haltMotors(); delay(40);
-      sweepStep = 2;
+    if (gLineSweepStep == 0) {
+      pivotLeft(kAutoTurnSpeed); delay(140); haltMotors(); delay(40);
+      gLineSweepStep = 1;
+    } else if (gLineSweepStep == 1) {
+      pivotRight(kAutoTurnSpeed); delay(280); haltMotors(); delay(40);
+      gLineSweepStep = 2;
     } else {
       // Finished line -> Clean finish-line victory halt
       haltMotors();
       displayBitmap(kIconCrown);
       playTone(880, 150); delay(40); playTone(1318, 250);
-      sweepStep = 0;
-      gCurrentMode = MODE_BLUETOOTH_RC;
+      gLineSweepStep = 0;
+      setMode(MODE_BLUETOOTH_RC);
       return;
     }
   } else {
     // Center alignment on track
+    gLineSweepStep = 0;
     displayBitmap(kArrowForward);
-    driveForward(gDriveSpeed);
+    driveForward(kAutoDriveSpeed);
   }
   delay(15);
 }
@@ -898,7 +958,7 @@ void runLightShowMode() {
  */
 void runLivingPetEngine() {
   float dist = getFilteredDistance();
-  if (Serial.available()) return;
+  if (Serial.available()) { haltMotors(); return; }
 
   // FAIL-SAFE: If sensor wire is disconnected, halt immediately!
   if (gSonarFault) {
@@ -926,7 +986,7 @@ void runLivingPetEngine() {
       if (!gMasterMute) { tone(kPinBuzzer1, 1400); delay(20); noTone(kPinBuzzer1); }
     }
 
-    if (dist >= kSafeStopDist && dist <= kMaxLeashDist) {
+    if (dist >= 10.0f && dist <= kMaxLeashDist) {
       // ✅ TARGET ACQUIRED! Complete Knight Handshake Ceremony
       gFollowLockAcquired = true;
       haltMotors();
@@ -943,11 +1003,19 @@ void runLivingPetEngine() {
     return;
   }
 
-  // 2. IMMEDIATE BRAKE & STANDBY (< 18cm -> Contiguous collision stop, zero gap!)
+  // 2. Petting & IMMEDIATE BRAKE (< 18cm -> Contiguous collision stop, zero gap!)
   if (dist > 0.0f && dist < kSafeStopDist) {
     haltMotors();
-    displayBitmap(kIconBrake);
-    stopAllAudio();
+    if (dist < 12.0f) {
+      displayBitmap(kIconHeart);
+      if (millis() - lastChirpTrillTime > 2500) {
+        talkAstromech(EMOTION_HAPPY);
+        lastChirpTrillTime = millis();
+      }
+    } else {
+      displayBitmap(kIconBrake);
+      stopAllAudio();
+    }
     lastLostTime = millis();
     delay(40);
     return;
@@ -1020,7 +1088,7 @@ void runLivingPetEngine() {
  */
 void runSpatialAirSynthesizer() {
   haltMotors();
-  if (Serial.available()) return;
+  if (Serial.available()) { haltMotors(); stopAllAudio(); return; }
 
   int lightVal = readActivePhotocell();
   uint8_t noteIdx = map(constrain(lightVal, 60, 920), 60, 920, 0, 9);
@@ -1083,16 +1151,30 @@ void runFlashbangAmbushMode() {
   haltMotors();
   float dist = getDistanceCm();
   bool heat = checkPirMotionDetected();
-  if (Serial.available()) return;
+  if (Serial.available()) { haltMotors(); stopAllAudio(); return; }
+
+  // 🛑 Cliff check before lunging
+  uint8_t leftCliff  = digitalRead(kPinLineSensorLeft);
+  uint8_t rightCliff = digitalRead(kPinLineSensorRight);
+  if (leftCliff == 0 || rightCliff == 0) {
+    haltMotors();
+    return;
+  }
 
   if (dist > 0.0f && dist < 45.0f && heat) {
     displayBitmap(kIconSkullAlert);
+    uint8_t ambushSpeed = (gCurrentGear == GEAR_PRECISION) ? 140 : 180;
     for (int i = 0; i < 4; i++) {
+      if (Serial.available() || digitalRead(kPinLineSensorLeft) == 0 || digitalRead(kPinLineSensorRight) == 0) {
+        haltMotors(); stopAllAudio(); return;
+      }
       setBuzzerTone(2200);
-      driveForward(255); delay(80);
-      if (Serial.available()) { stopAllAudio(); return; }
+      driveForward(ambushSpeed); delay(80);
+      if (Serial.available() || digitalRead(kPinLineSensorLeft) == 0 || digitalRead(kPinLineSensorRight) == 0) {
+        haltMotors(); stopAllAudio(); return;
+      }
       setBuzzerTone(800);
-      driveBackward(255); delay(80);
+      driveBackward(ambushSpeed); delay(80);
     }
     stopAllAudio();
     haltMotors();
@@ -1102,6 +1184,7 @@ void runFlashbangAmbushMode() {
     digitalWrite(kPinStatusLed, (millis() / 800) % 2);
     delay(80);
   }
+  haltMotors();
 }
 
 void runCliffDetectionMode() {
@@ -1229,7 +1312,9 @@ void runSpinTheDroidRoulette() {
     pivotRight(pwm);
     displayBitmap(kIconCrown);
     playTone(600 + pwm * 3, 30);
-    delay(100);
+    for (unsigned long start = millis(); millis() - start < 100; delay(10)) {
+      if (Serial.available()) { haltMotors(); return; }
+    }
   }
   haltMotors();
   talkAstromech(EMOTION_HAPPY);
@@ -1251,10 +1336,14 @@ void runKnightLPathManeuver() {
 
   if (Serial.available()) { haltMotors(); return; }
 
-  // 1. Two paces forward (Cliff-Guarded)
-  if (digitalRead(kPinLineSensorLeft) != 0 && digitalRead(kPinLineSensorRight) != 0) {
+  // 1. Two paces forward (Cliff-Guarded & Obstacle-Guarded)
+  if (digitalRead(kPinLineSensorLeft) != 0 && digitalRead(kPinLineSensorRight) != 0 && getDistanceCm() > 15.0f) {
     driveForward(175);
-    delay(420);
+    for (unsigned long start = millis(); millis() - start < 420; delay(10)) {
+      if (Serial.available() || digitalRead(kPinLineSensorLeft) == 0 || digitalRead(kPinLineSensorRight) == 0) {
+        haltMotors(); return;
+      }
+    }
     haltMotors();
   }
   delay(60);
@@ -1262,15 +1351,21 @@ void runKnightLPathManeuver() {
 
   // 2. Crisp 90-degree pivot
   pivotRight(185);
-  delay(270);
+  for (unsigned long start = millis(); millis() - start < 270; delay(10)) {
+    if (Serial.available()) { haltMotors(); return; }
+  }
   haltMotors();
   delay(60);
   if (Serial.available()) { haltMotors(); return; }
 
-  // 3. One pace forward (Completing the L - Cliff-Guarded)
-  if (digitalRead(kPinLineSensorLeft) != 0 && digitalRead(kPinLineSensorRight) != 0) {
+  // 3. One pace forward (Completing the L - Cliff-Guarded & Obstacle-Guarded)
+  if (digitalRead(kPinLineSensorLeft) != 0 && digitalRead(kPinLineSensorRight) != 0 && getDistanceCm() > 15.0f) {
     driveForward(175);
-    delay(240);
+    for (unsigned long start = millis(); millis() - start < 240; delay(10)) {
+      if (Serial.available() || digitalRead(kPinLineSensorLeft) == 0 || digitalRead(kPinLineSensorRight) == 0) {
+        haltMotors(); return;
+      }
+    }
     haltMotors();
   }
   delay(40);
@@ -1835,11 +1930,13 @@ const uint8_t PROGMEM kFont3x3[10][3] = {
 };
 
 void displayStaticClock(uint8_t hours, uint8_t minutes, bool showColon) {
+  hours = constrain(hours, 0, 23);
+  minutes = constrain(minutes, 0, 59);
   uint8_t hDisplay = (hours % 12 == 0) ? 12 : (hours % 12);
-  uint8_t h1 = hDisplay / 10;
-  uint8_t h2 = hDisplay % 10;
-  uint8_t m1 = minutes / 10;
-  uint8_t m2 = minutes % 10;
+  uint8_t h1 = constrain(hDisplay / 10, 0, 9);
+  uint8_t h2 = constrain(hDisplay % 10, 0, 9);
+  uint8_t m1 = constrain(minutes / 10, 0, 9);
+  uint8_t m2 = constrain(minutes % 10, 0, 9);
 
   uint8_t frame[8] = {0};
 
@@ -1875,7 +1972,7 @@ void scrollTextAcrossMatrix(const char* text, uint8_t scrollSpeedMs) {
   uint16_t totalCols = len * 6 + 8;
 
   for (uint16_t pos = 0; pos < totalCols; pos++) {
-    if (Serial.available()) return; // Non-blocking interrupt
+    if (Serial.available()) { haltMotors(); return; } // Non-blocking interrupt
 
     uint8_t frameRows[8] = {0};
 
@@ -1912,6 +2009,7 @@ void haltMotors() {
   analogWrite(kPinMotorRightPwm, 0);
   digitalWrite(kPinMotorLeftDir, LOW);
   digitalWrite(kPinMotorRightDir, LOW);
+  gMotorActive = false;
 }
 
 void driveForward(uint8_t speed) {
@@ -1919,6 +2017,7 @@ void driveForward(uint8_t speed) {
   analogWrite(kPinMotorRightPwm, speed);
   digitalWrite(kPinMotorLeftDir, LOW);
   digitalWrite(kPinMotorRightDir, LOW);
+  if (speed > 0) gMotorActive = true;
 }
 
 void driveBackward(uint8_t speed) {
@@ -1926,6 +2025,7 @@ void driveBackward(uint8_t speed) {
   analogWrite(kPinMotorRightPwm, speed);
   digitalWrite(kPinMotorLeftDir, HIGH);
   digitalWrite(kPinMotorRightDir, HIGH);
+  if (speed > 0) gMotorActive = true;
 }
 
 void pivotLeft(uint8_t speed) {
@@ -1933,6 +2033,7 @@ void pivotLeft(uint8_t speed) {
   analogWrite(kPinMotorRightPwm, speed);
   digitalWrite(kPinMotorLeftDir, HIGH);
   digitalWrite(kPinMotorRightDir, LOW);
+  if (speed > 0) gMotorActive = true;
 }
 
 void pivotRight(uint8_t speed) {
@@ -1940,6 +2041,7 @@ void pivotRight(uint8_t speed) {
   analogWrite(kPinMotorRightPwm, speed);
   digitalWrite(kPinMotorLeftDir, LOW);
   digitalWrite(kPinMotorRightDir, HIGH);
+  if (speed > 0) gMotorActive = true;
 }
 
 float getDistanceCm() {
@@ -1953,7 +2055,7 @@ float getDistanceCm() {
   if (duration == 0) {
     gSonarFault = true; // 🛑 1 single timeout immediately latches fault!
     gSonarGoodCount = 0;
-    return 999.0f;
+    return 0.0f; // STOP: return 0.0f, not 999.0f!
   }
   gSonarGoodCount++;
   if (gSonarGoodCount >= 5) {
@@ -1992,6 +2094,9 @@ int readActivePhotocell() {
 }
 
 bool checkPirMotionDetected() {
-  // Pin D12 is configured as plain INPUT (active HIGH when optional PIR hardware is attached)
-  return (digitalRead(kPinExpansionD12) == HIGH);
+  static uint8_t lastPirState = LOW;
+  uint8_t current = digitalRead(kPinExpansionD12);
+  bool triggered = (current == HIGH && lastPirState == LOW);
+  lastPirState = current;
+  return triggered;
 }

@@ -52,6 +52,7 @@ float readUltrasonic();
 void setup() {
   Serial.begin(9600);
   Wire.begin();
+  Wire.setWireTimeout(3000, true);
 
   // Enforce desk-safe motor lockout
   pinMode(kPinMotorLeftDir, OUTPUT);
