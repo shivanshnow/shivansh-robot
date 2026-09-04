@@ -35,6 +35,7 @@ const uint8_t kPinMotorRightDir  = A1;   // Right Motor Phase
 const uint8_t kPinStatusLed      = LED_BUILTIN;
 
 // Expansion Port Pins
+const uint8_t kPinLdrFollow    = A0; // Photocell (LDR) on A0 for continuous bearing tracking
 const uint8_t kPinExpansionA2  = A2;
 const uint8_t kPinExpansionA3  = A3;
 const uint8_t kPinExpansionD12 = 12;
@@ -127,6 +128,23 @@ float gDistanceHistory[5] = {20.0f, 20.0f, 20.0f, 20.0f, 20.0f};
 uint8_t gHistoryIdx = 0;
 unsigned long gLastIdleChirpTime = 0;
 bool gFollowLockAcquired = false;
+
+// Phase 2: Three-Sensor Fusion State & Bearing Memory
+enum FollowBearing {
+  BEARING_CENTER = 0,
+  BEARING_LEFT   = -1,
+  BEARING_RIGHT  = 1
+};
+
+struct BearingMemory {
+  FollowBearing bearing;
+  uint8_t confidence;
+  unsigned long timestamp;
+};
+
+BearingMemory gLastBearing = {BEARING_CENTER, 0, 0};
+bool gLdrHealthy = false;
+bool gPirHealthy = false;
 
 // Pentatonic Scale for Air Synthesizer
 const unsigned int kPentatonicScale[10] = {
@@ -309,9 +327,11 @@ void driveForward(uint8_t speed);
 void driveBackward(uint8_t speed);
 void pivotLeft(uint8_t speed);
 void pivotRight(uint8_t speed);
+void arcDrive(uint8_t leftPwm, uint8_t rightPwm);
 float getDistanceCm();
 float getFilteredDistance();
 int readActivePhotocell();
+int sampleLdrWithHealth();
 bool checkPirMotionDetected();
 
 // Master Studio Engines
@@ -412,6 +432,7 @@ void setupHardware() {
   pinMode(kPinLineSensorLeft, INPUT);
   pinMode(kPinLineSensorRight, INPUT);
 
+  pinMode(kPinLdrFollow, INPUT);
   pinMode(kPinExpansionA2, INPUT);
   pinMode(kPinExpansionA3, INPUT);
   pinMode(kPinExpansionD12, INPUT); // Plain INPUT without internal pullup (prevents false PIR trigger)
@@ -1087,7 +1108,8 @@ void runLightShowMode() {
 }
 
 /**
- * Mode 5: Follow Me (Living Pet Companion & Autonomous Human Follow)
+ * Mode 5: Follow Me (Three-Sensor Fusion: LDR on A0, Sonar on D2/D3, PIR on D12)
+ * Full Graceful Degradation Matrix & Continuous Bacterial Chemotaxis Arc-Drive
  */
 void runLivingPetEngine() {
   float dist = getFilteredDistance();
@@ -1102,18 +1124,59 @@ void runLivingPetEngine() {
   static unsigned long lastChirpTrillTime = 0;
   static int scanDir = 1;
   static float lastValidDist = 0.0f;
+  static int lastLdrVal = 0;
+  static int8_t arcDirection = 1; // +1 = right arc bias, -1 = left arc bias
+  static int16_t lastFollowErr = 0;
 
-  // 1. Initial Handshake Lock Ritual (Wait for Pilot to stand in front before rolling!)
+  // 1. Sample Sensors & Evaluate Health (B4)
+  int currentLdr = sampleLdrWithHealth();
+  int ldrDelta = currentLdr - lastLdrVal;
+  lastLdrVal = currentLdr;
+
+  bool pirMotion = checkPirMotionDetected();
+  bool sonarHealthy = !gSonarFault;
+  bool ldrHealthy   = gLdrHealthy;
+  bool pirHealthy   = gPirHealthy;
+
+  // PIR gate: if PIR is healthy, gate tracking on motion seen within 4 seconds;
+  // if PIR is down/absent, assume human is present (B3 degradation matrix)
+  bool humanConfirmed = true;
+  if (pirHealthy) {
+    static unsigned long lastMotionSeen = 0;
+    if (pirMotion) lastMotionSeen = millis();
+    humanConfirmed = (millis() - lastMotionSeen < 4000UL);
+  } else {
+    humanConfirmed = true;
+  }
+
+  // 2. DEGRADATION MATRIX: ALL THREE DOWN -> Halt, chirp, standby (Never guess)
+  if (!ldrHealthy && !sonarHealthy && !pirHealthy) {
+    haltMotors();
+    chirpAlert();
+    gFollowLockAcquired = false;
+    displayBitmap(kIconStandby);
+    safeMotorDelay(100, false, false);
+    return;
+  }
+
+  // 3. Initial Handshake Lock Ritual (Wait for Pilot to stand in front before rolling!)
   if (!gFollowLockAcquired) {
     haltMotors();
     displayBitmap(kIconStandby);
 
-    // Interrogative sonar pulse
+    // Interrogative acoustic pulse
     if (millis() % 700 < 40) {
       if (!gMasterMute) { tone(kPinBuzzer1, 1400); delay(20); noTone(kPinBuzzer1); }
     }
 
-    if (dist >= 10.0f && dist <= kMaxLeashDist) {
+    bool lockTriggered = false;
+    if (sonarHealthy && dist >= 10.0f && dist <= kMaxLeashDist) {
+      lockTriggered = true;
+    } else if (!sonarHealthy && ldrHealthy && currentLdr > 250) {
+      lockTriggered = true; // Sonar down: lock on optical beacon
+    }
+
+    if (lockTriggered) {
       // Explicit cliff check before handshake nod
       if (digitalRead(kPinLineSensorLeft) == 0 || digitalRead(kPinLineSensorRight) == 0 || gCliffFault) {
         haltMotors();
@@ -1145,8 +1208,45 @@ void runLivingPetEngine() {
     return;
   }
 
-  // 2. IMMEDIATE UNFILTERED COLLISION STOP (< 25cm -> Immediate brake, zero median delay!)
-  if (rawDist > 0.0f && rawDist < kSafeStopDist) {
+  // 4. DEGRADATION MATRIX: SONAR DOWN -> LDR bearing + PIR gate, NO range: cap speed, shorten legs, stop often
+  if (!sonarHealthy && ldrHealthy) {
+    if (!humanConfirmed) {
+      haltMotors();
+      displayBitmap(kIconStandby);
+      safeMotorDelay(40, false, false);
+      return;
+    }
+    // Explicit cliff check before moving
+    if (digitalRead(kPinLineSensorLeft) == 0 || digitalRead(kPinLineSensorRight) == 0 || gCliffFault) {
+      haltMotors(); gFollowLockAcquired = false; displayBitmap(kIconCliffGuard); return;
+    }
+
+    // LDR gradient run-and-tumble: compare change over time
+    if (ldrDelta > 4) {
+      // Brightness rising -> keep current arc direction
+    } else if (ldrDelta < -4) {
+      // Brightness falling -> invert arc direction
+      arcDirection = -arcDirection;
+    }
+    FollowBearing ldrB = (arcDirection > 0) ? BEARING_RIGHT : BEARING_LEFT;
+
+    uint8_t crawlSpeed = 115;
+    uint8_t lPwm = crawlSpeed;
+    uint8_t rPwm = crawlSpeed;
+    if (ldrB == BEARING_LEFT) { lPwm = 90; rPwm = 135; }
+    else if (ldrB == BEARING_RIGHT) { lPwm = 135; rPwm = 90; }
+
+    displayBitmap(kArrowForward);
+    arcDrive(lPwm, rPwm);
+    if (!safeMotorDelay(25, true, false)) { haltMotors(); gFollowLockAcquired = false; return; }
+    haltMotors(); // Short leg, stop often!
+    safeMotorDelay(35, false, false);
+    lastLostTime = millis();
+    return;
+  }
+
+  // 5. IMMEDIATE UNFILTERED COLLISION STOP (< 25cm -> Immediate brake, zero median delay!)
+  if (sonarHealthy && rawDist > 0.0f && rawDist < kSafeStopDist) {
     haltMotors();
     if (rawDist < 12.0f) {
       displayBitmap(kIconHeart);
@@ -1164,8 +1264,8 @@ void runLivingPetEngine() {
     return;
   }
 
-  // 3. Follow Me Sweet Spot (25cm - 32cm -> Standby & Subtle Flank Scan)
-  if (dist >= kSafeStopDist && dist <= kSweetSpotMax) {
+  // 6. Follow Me Sweet Spot (25cm - 32cm -> Standby & Subtle Flank Scan)
+  if (sonarHealthy && dist >= kSafeStopDist && dist <= kSweetSpotMax) {
     haltMotors();
     displayBitmap(kIconFollowPuppy);
     stopAllAudio();
@@ -1191,8 +1291,8 @@ void runLivingPetEngine() {
     }
     safeMotorDelay(30, false, false);
   }
-  // 4. Human Walking Away (32cm - 80cm -> Smooth Proportional Follow)
-  else if (dist > kSweetSpotMax && dist <= kMaxLeashDist) {
+  // 7. Human Walking Away (32cm - 80cm -> Three-Sensor Fusion Arc-Drive Follow)
+  else if (sonarHealthy && dist > kSweetSpotMax && dist <= kMaxLeashDist) {
     // Explicit cliff check immediately before forward leg
     if (digitalRead(kPinLineSensorLeft) == 0 || digitalRead(kPinLineSensorRight) == 0 || gCliffFault) {
       haltMotors();
@@ -1201,11 +1301,143 @@ void runLivingPetEngine() {
       return;
     }
 
+    if (!humanConfirmed) {
+      haltMotors();
+      displayBitmap(kIconStandby);
+      safeMotorDelay(40, false, false);
+      return;
+    }
+
+    // Determine Bearing & Confidence from Sensors (B1, B2, B3)
+    FollowBearing ldrBearing = BEARING_CENTER;
+    uint8_t ldrConfidence = 0;
+
+    if (ldrHealthy) {
+      // B1: Continuous run-and-tumble gradient comparison (chemotaxis)
+      const int kGradThreshold = 4;
+      if (ldrDelta > kGradThreshold) {
+        // Brightness rising -> curving toward torch beacon
+        ldrBearing = (arcDirection > 0) ? BEARING_RIGHT : BEARING_LEFT;
+        ldrConfidence = constrain(ldrDelta * 8, 25, 85);
+      } else if (ldrDelta < -kGradThreshold) {
+        // Brightness falling -> curving away, invert arc
+        arcDirection = -arcDirection;
+        ldrBearing = (arcDirection > 0) ? BEARING_RIGHT : BEARING_LEFT;
+        ldrConfidence = constrain((-ldrDelta) * 8, 25, 85);
+      } else {
+        ldrBearing = BEARING_CENTER;
+        ldrConfidence = 20;
+      }
+    }
+
+    // B3: DEGRADATION MATRIX — LDR Down -> Fall back to Sonar Conical Scan-and-Compare
+    FollowBearing sonarBearing = BEARING_CENTER;
+    uint8_t sonarConfidence = 0;
+
+    if (!ldrHealthy && sonarHealthy) {
+      static unsigned long lastConicalScan = 0;
+      if (millis() - lastConicalScan > 800UL) {
+        lastConicalScan = millis();
+        const uint16_t kConicalMs = 20 * kPivotMsPerDegree; // 20° = 60ms at PWM 185
+        
+        float dCenter = getDistanceCm();
+        
+        pivotLeft(kPivotCalibratedPwm);
+        if (!safeMotorDelay(kConicalMs, true, false)) { haltMotors(); gFollowLockAcquired = false; return; }
+        haltMotors();
+        safeMotorDelay(20, false, false);
+        float dLeft = getDistanceCm();
+        
+        pivotRight(kPivotCalibratedPwm);
+        if (!safeMotorDelay(kConicalMs, true, false)) { haltMotors(); gFollowLockAcquired = false; return; }
+        haltMotors();
+        safeMotorDelay(20, false, false);
+        
+        pivotRight(kPivotCalibratedPwm);
+        if (!safeMotorDelay(kConicalMs, true, false)) { haltMotors(); gFollowLockAcquired = false; return; }
+        haltMotors();
+        safeMotorDelay(20, false, false);
+        float dRight = getDistanceCm();
+        
+        pivotLeft(kPivotCalibratedPwm);
+        if (!safeMotorDelay(kConicalMs, true, false)) { haltMotors(); gFollowLockAcquired = false; return; }
+        haltMotors();
+        safeMotorDelay(20, false, false);
+
+        // Steer to shortest return
+        float minD = 999.0f;
+        FollowBearing bestB = BEARING_CENTER;
+        if (dCenter > 0.0f && dCenter < minD) { minD = dCenter; bestB = BEARING_CENTER; }
+        if (dLeft > 0.0f && dLeft < minD)     { minD = dLeft; bestB = BEARING_LEFT; }
+        if (dRight > 0.0f && dRight < minD)   { minD = dRight; bestB = BEARING_RIGHT; }
+
+        if (minD <= kMaxLeashDist) {
+          sonarBearing = bestB;
+          sonarConfidence = 75;
+        }
+      } else {
+        sonarBearing = gLastBearing.bearing;
+        sonarConfidence = (gLastBearing.confidence > 20) ? gLastBearing.confidence - 10 : 0;
+      }
+    } else {
+      sonarBearing = BEARING_CENTER;
+      sonarConfidence = 40;
+    }
+
+    // B2: Confidence-Weighted Fusion Vote
+    FollowBearing fusedBearing = BEARING_CENTER;
+    int16_t totalVote = 0;
+    int16_t totalWeight = 0;
+
+    if (ldrHealthy && ldrConfidence > 0) {
+      totalVote += (int16_t)ldrBearing * ldrConfidence;
+      totalWeight += ldrConfidence;
+    }
+    if (sonarConfidence > 0) {
+      totalVote += (int16_t)sonarBearing * sonarConfidence;
+      totalWeight += sonarConfidence;
+    }
+
+    if (totalWeight > 0) {
+      if (totalVote > 15) fusedBearing = BEARING_RIGHT;
+      else if (totalVote < -15) fusedBearing = BEARING_LEFT;
+      else fusedBearing = BEARING_CENTER;
+
+      // Update Bearing Memory (B5)
+      gLastBearing.bearing = fusedBearing;
+      gLastBearing.confidence = constrain(totalWeight / 2, 10, 90);
+      gLastBearing.timestamp = millis();
+    } else if (millis() - gLastBearing.timestamp < 3000UL) {
+      fusedBearing = gLastBearing.bearing; // Use memory within 3 seconds
+    }
+
     displayBitmap(kArrowForward);
-    // Capped follow speed (0.2-0.25 m/s): 115 PWM gentle to 170 PWM cruise ceiling
-    uint8_t followSpeed = map(constrain((long)dist, (long)kSweetSpotMax, 80), (long)kSweetSpotMax, 80, 115, 170);
-    driveForward(followSpeed);
-    if (!safeMotorDelay(30, true, false)) {
+
+    // B5: PD Controller on distance error: target distance 28cm (pure integer math)
+    const int16_t kTargetDist = 28;
+    int16_t err = (int16_t)dist - kTargetDist;
+    int16_t dErr = err - lastFollowErr;
+    lastFollowErr = err;
+
+    // Integer PD: Kp = 1.4, Kd = 0.6 -> (err * 14 + dErr * 6) / 10
+    int16_t pdSpeed = 115 + (err * 14 + dErr * 6) / 10;
+    uint8_t baseSpeed = constrain(pdSpeed, 115, 170); // Capped at 170 PWM (0.2-0.25 m/s)
+
+    // Arc-Drive: bias wheel PWM while moving based on fused bearing
+    uint8_t leftPwm = baseSpeed;
+    uint8_t rightPwm = baseSpeed;
+    const uint8_t kBias = 24;
+
+    if (fusedBearing == BEARING_LEFT) {
+      leftPwm = (baseSpeed > kBias + 60) ? baseSpeed - kBias : 60;
+      rightPwm = (baseSpeed + kBias <= 170) ? baseSpeed + kBias : 170;
+    } else if (fusedBearing == BEARING_RIGHT) {
+      leftPwm = (baseSpeed + kBias <= 170) ? baseSpeed + kBias : 170;
+      rightPwm = (baseSpeed > kBias + 60) ? baseSpeed - kBias : 60;
+    }
+
+    arcDrive(leftPwm, rightPwm);
+    if (!safeMotorDelay(35, true, false)) {
       haltMotors();
       gFollowLockAcquired = false;
       return;
@@ -1213,7 +1445,7 @@ void runLivingPetEngine() {
     lastLostTime = millis();
     lastValidDist = dist;
   }
-  // 5. Lost Target / Out of Range (>80cm / No Echo) -> Saccadic Radar Scan
+  // 8. Lost Target / Out of Range (>80cm / No Echo) -> Saccadic Radar Scan with Bearing Memory Bias
   else {
     haltMotors();
     displayBitmap(kIconStandby);
@@ -1223,6 +1455,13 @@ void runLivingPetEngine() {
 
     // If lost for > 400ms, gently search left/right ONLY if not lost at close range
     if (!wasCloseRange && millis() - lastLostTime > 400 && millis() - lastLostTime < 2500) {
+      // B5: Use lastBearing memory to bias search direction instead of coin-flipping!
+      if (gLastBearing.bearing == BEARING_LEFT && (millis() - gLastBearing.timestamp < 3500UL)) {
+        scanDir = -1; // Bias search to LEFT
+      } else if (gLastBearing.bearing == BEARING_RIGHT && (millis() - gLastBearing.timestamp < 3500UL)) {
+        scanDir = 1;  // Bias search to RIGHT
+      }
+
       const uint16_t searchMs = 25 * kPivotMsPerDegree; // 25° = 75ms at PWM 185
       if (scanDir > 0) pivotRight(kPivotCalibratedPwm);
       else pivotLeft(kPivotCalibratedPwm);
@@ -1246,7 +1485,7 @@ void runLivingPetEngine() {
           lastChirpTrillTime = millis();
         }
       } else {
-        scanDir = -scanDir; // Alternate search direction
+        scanDir = -scanDir; // Alternate search direction if not found
       }
     } else if (millis() - lastLostTime >= 2500) {
       // 2.5s Auto-Timeout: Safe sleep disarm (reset handshake for next lock)
@@ -2268,7 +2507,22 @@ void pivotRight(uint8_t speed) {
   if (speed > 0) gMotorActive = true;
 }
 
+void arcDrive(uint8_t leftPwm, uint8_t rightPwm) {
+  analogWrite(kPinMotorLeftPwm, leftPwm);
+  analogWrite(kPinMotorRightPwm, rightPwm);
+  digitalWrite(kPinMotorLeftDir, LOW);
+  digitalWrite(kPinMotorRightDir, LOW);
+  if (leftPwm > 0 || rightPwm > 0) gMotorActive = true;
+}
+
 float getDistanceCm() {
+  // Stuck-high echo before trigger indicates hardware electrical fault
+  if (digitalRead(kPinUltrasonicEcho) == HIGH) {
+    gSonarFault = true;
+    gSonarGoodCount = 0;
+    return 0.0f;
+  }
+
   digitalWrite(kPinUltrasonicTrig, LOW);
   delayMicroseconds(2);
   digitalWrite(kPinUltrasonicTrig, HIGH);
@@ -2276,11 +2530,16 @@ float getDistanceCm() {
   digitalWrite(kPinUltrasonicTrig, LOW);
 
   long duration = pulseIn(kPinUltrasonicEcho, HIGH, 25000); // 25ms max timeout (~4.2m)
+  static uint8_t sonarConsecutiveZeroes = 0;
   if (duration == 0) {
-    gSonarFault = true; // 🛑 1 single timeout immediately latches fault!
+    sonarConsecutiveZeroes++;
+    if (sonarConsecutiveZeroes >= 8) {
+      gSonarFault = true; // 8 consecutive timeouts latches hardware fault
+    }
     gSonarGoodCount = 0;
-    return 0.0f; // STOP: return 0.0f, not 999.0f!
+    return 0.0f; // "No echo" means no target in range: return 0.0f
   }
+  sonarConsecutiveZeroes = 0;
   gSonarGoodCount++;
   if (gSonarGoodCount >= 5) {
     gSonarFault = false; // Requires 5 consecutive valid readings to clear!
@@ -2318,10 +2577,52 @@ int readActivePhotocell() {
   return max(max(rawA2, rawA3), max(rawA6, rawA7));
 }
 
+int sampleLdrWithHealth() {
+  int raw = analogRead(kPinLdrFollow);
+  static int minAdc = 1023;
+  static int maxAdc = 0;
+  static unsigned long lastLdrWindow = 0;
+
+  if (raw < minAdc) minAdc = raw;
+  if (raw > maxAdc) maxAdc = raw;
+
+  if (millis() - lastLdrWindow >= 3000UL) {
+    int variance = maxAdc - minAdc;
+    // Active LDR responds to torch / ambient movement with variance >= 12
+    gLdrHealthy = (variance >= 12);
+    minAdc = 1023;
+    maxAdc = 0;
+    lastLdrWindow = millis();
+  }
+  return raw;
+}
+
 bool checkPirMotionDetected() {
-  static uint8_t lastPirState = LOW;
+  static uint8_t lastPirState = 255;
+  static unsigned long lastEdgeTime = 0;
+
   uint8_t current = digitalRead(kPinExpansionD12);
-  bool triggered = (current == HIGH && lastPirState == LOW);
-  lastPirState = current;
-  return triggered;
+  if (lastPirState == 255) {
+    lastPirState = current;
+    lastEdgeTime = millis();
+    gPirHealthy = false;
+    return false;
+  }
+
+  bool triggered = false;
+  if (current != lastPirState) {
+    if (current == HIGH && lastPirState == LOW) {
+      triggered = true;
+    }
+    lastPirState = current;
+    lastEdgeTime = millis();
+    gPirHealthy = true;
+  } else {
+    // If no pin level transitions occur for > 12 seconds, sensor is absent/unplugged
+    if (millis() - lastEdgeTime > 12000UL) {
+      gPirHealthy = false;
+    }
+  }
+
+  return (gPirHealthy && triggered);
 }
