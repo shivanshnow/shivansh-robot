@@ -940,6 +940,10 @@
         <button class="btn-toggle-mini" style="border-color:var(--neon-green); color:var(--neon-green); padding:8px 0;" onclick="analyzePhysicalChessboard()" aria-label="Scan Physical Chessboard">♟️ SCAN CHESSBOARD</button>
       </div>
       <input type="text" class="cortex-input" id="aiGoalInput" placeholder="Type target to find (e.g. 'Find my mug', 'Find blue keys')">
+      <!-- 🛡️ SUPERVISED AI PLAN EXECUTION BUTTON (Deadman Hold-to-Execute) -->
+      <button class="btn-toggle-mini" id="btnExecuteAiPlan" style="display:none; width:100%; margin-top:6px; background:rgba(0, 245, 212, 0.15); border-color:var(--neon-green); color:var(--neon-green); font-weight:800; padding:10px 0; font-size:0.75rem; user-select:none; -webkit-user-select:none;" aria-label="Press and Hold to Execute AI Plan">
+        🟢 HOLD TO EXECUTE PROPOSED AI PLAN
+      </button>
 
       <!-- 👑 ROYAL ASTROMECH EXECUTIVE BRIEFING & VOCAL CORTEX -->
       <div style="background:var(--card-bg); border:1.5px solid rgba(255, 190, 11, 0.4); border-radius:14px; padding:10px 12px; margin-top:10px;">
@@ -1064,8 +1068,8 @@
       <div class="card-left">
         <div class="card-icon">🎙️</div>
         <div>
-          <div class="card-title">Whisper & Shout Drive</div>
-          <div class="card-desc">Whisper for stealth crawling • Shout for turbo boost!</div>
+          <div class="card-title">Whisper & Shout Acoustic</div>
+          <div class="card-desc">Whisper or shout for acoustic astromech chirps!</div>
         </div>
       </div>
       <div class="btn-card-action">LISTEN</div>
@@ -1128,9 +1132,111 @@
     let pixelMatrix = Array(8).fill(0).map(() => Array(8).fill(0));
     let cameraActive = false;
     let lastFlowCmd = 'S';
+    let lastGyroCmd = 'S';
+    let isTouchingPad = false;
     let gAiVisionAborted = false;
     let availableVideoDevices = [];
     let currentDeviceIndex = 0;
+    let currentActiveMission = null;
+    let missionStartTime = 0;
+    let missionTimerInterval = null;
+    let missionKeepaliveTimer = null;
+    let driveHeartbeatTimer = null;
+    let gyroHeartbeatTimer = null;
+    let baselineBeta = null;
+    let baselineGamma = null;
+    let pendingAiPlan = null;
+    let isSupervisingAiPlan = false;
+
+    function stopDriveHeartbeat() {
+      if (driveHeartbeatTimer) {
+        clearInterval(driveHeartbeatTimer);
+        driveHeartbeatTimer = null;
+      }
+    }
+
+    function stopGyroHeartbeat() {
+      if (gyroHeartbeatTimer) {
+        clearInterval(gyroHeartbeatTimer);
+        gyroHeartbeatTimer = null;
+      }
+    }
+
+    function stopMissionKeepalive() {
+      if (missionKeepaliveTimer) {
+        clearInterval(missionKeepaliveTimer);
+        missionKeepaliveTimer = null;
+      }
+    }
+
+    // 🛑 CENTRAL MASTER DISARM & FAILSAFE (Universal disarm across all control modes)
+    function disarmAll() {
+      // 1. Terminate all motion and keepalive timers immediately
+      stopDriveHeartbeat();
+      stopGyroHeartbeat();
+      stopMissionKeepalive();
+
+      // 2. Disarm gyro tilt steering
+      gyroActive = false;
+      const btnGyro = document.getElementById("btnGyro");
+      if (btnGyro) {
+        btnGyro.classList.remove("active");
+        btnGyro.innerText = "OFF";
+      }
+      try {
+        window.removeEventListener('deviceorientation', handleOrientation);
+      } catch(e) {}
+      lastGyroCmd = 'S';
+
+      // 3. Disarm flow pad steering
+      lastFlowCmd = 'S';
+      isTouchingPad = false;
+      const flowThumb = document.getElementById("flowThumb");
+      if (flowThumb) {
+        flowThumb.style.left = "50%";
+        flowThumb.style.top  = "50%";
+      }
+      const vecLabel = document.getElementById("flowVectorLabel");
+      if (vecLabel) vecLabel.innerText = "Center [0, 0]";
+
+      // 4. Abort in-progress AI vision navigation & supervisory hold
+      gAiVisionAborted = true;
+      isSupervisingAiPlan = false;
+      const reticle = document.getElementById("targetReticle");
+      if (reticle) reticle.style.display = "none";
+      const btnAi = document.getElementById("btnExecuteAiPlan");
+      if (btnAi) btnAi.style.display = "none";
+      pendingAiPlan = null;
+
+      // 5. Clear active mission & stop Pomodoro
+      currentActiveMission = null;
+      if (missionTimerInterval) {
+        clearInterval(missionTimerInterval);
+        missionTimerInterval = null;
+      }
+      stopPomodoro();
+
+      const hud = document.getElementById("activeMissionHud");
+      if (hud) hud.style.display = "none";
+      document.querySelectorAll(".feature-card").forEach(card => {
+        card.classList.remove("mission-active-card");
+        const btn = card.querySelector(".btn-card-action");
+        if (btn && btn.getAttribute("data-original-text")) {
+          btn.innerText = btn.getAttribute("data-original-text");
+          btn.style.background = "";
+          btn.style.color = "";
+          btn.style.borderColor = "";
+        }
+      });
+      const metric = document.getElementById("sentryStatusMetric");
+      if (metric) {
+        metric.innerText = "⚪ SENTRY STANDBY";
+        metric.style.color = "var(--subtext)";
+      }
+
+      // 6. Unconditionally queue emergency stop opcode 'S'
+      sendCommand('S');
+    }
 
     // ------------------------------------------------------------------------
     // TOP-LEVEL IMMEDIATE ARMING & CALLSIGN INITIALIZATION
@@ -1255,20 +1361,9 @@
     }
 
     function emergencyStop() {
-      // 🛑 SAFETY FIRST: Invalidate drive heartbeat and active touch state immediately
-      stopDriveHeartbeat();
-      lastFlowCmd = 'S';
-      isTouchingPad = false;
-      sendCommand("S");
-
-      // Reset controls & trigger feedback
-      gAiVisionAborted = true;
-      flowThumb.style.left = "50%";
-      flowThumb.style.top  = "50%";
-      const vecLabel = document.getElementById("flowVectorLabel");
-      if (vecLabel) vecLabel.innerText = "Center [0, 0]";
+      disarmAll();
       triggerHaptic('heavy');
-      document.getElementById("hudLog").innerText = "[STOP] 🛑 Emergency Brake Engaged!";
+      document.getElementById("hudLog").innerText = "[STOP] 🛑 Emergency Brake Engaged! All systems disarmed.";
     }
 
     async function triggerRoyalSalute() {
@@ -1345,7 +1440,6 @@
       }
     }
 
-    let driveHeartbeatTimer = null;
     function startDriveHeartbeat(cmd) {
       stopDriveHeartbeat();
       if (cmd !== 'S') {
@@ -1354,12 +1448,6 @@
             sendCommand(cmd);
           }
         }, 150);
-      }
-    }
-    function stopDriveHeartbeat() {
-      if (driveHeartbeatTimer) {
-        clearInterval(driveHeartbeatTimer);
-        driveHeartbeatTimer = null;
       }
     }
 
@@ -1392,21 +1480,6 @@
     window.addEventListener("pointerup", handlePadRelease);
     window.addEventListener("pointercancel", handlePadRelease);
 
-    // 🛑 BACKGROUND SAFETY AUTO-STOP (Tab switched / phone sleep / lost focus)
-    function handleBackgroundStop() {
-      stopDriveHeartbeat();
-      const wasActive = isTouchingPad || lastFlowCmd !== 'S';
-      isTouchingPad = false;
-      lastFlowCmd = 'S';
-      if (wasActive) {
-        sendCommand('S');
-      }
-      flowThumb.style.left = "50%";
-      flowThumb.style.top  = "50%";
-      const vecLabel = document.getElementById("flowVectorLabel");
-      if (vecLabel) vecLabel.innerText = "Center [0, 0]";
-    }
-
     function stopCamera() {
       const video = document.getElementById("cameraStream");
       const placeholder = document.getElementById("cameraPlaceholder");
@@ -1423,13 +1496,29 @@
       cameraActive = false;
     }
 
-    window.addEventListener("blur", handleBackgroundStop);
+    // 🛑 UNIVERSAL BACKGROUNDING & LOCKING FAILSAFE (Tab hidden / phone lock / blur / freeze)
+    function handleBackgroundDisarm() {
+      disarmAll();
+      stopCamera();
+      stopVoiceRecognition();
+    }
+
+    window.addEventListener("blur", () => {
+      disarmAll();
+    });
+
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
-        handleBackgroundStop();
-        stopCamera();
-        stopVoiceRecognition();
+        handleBackgroundDisarm();
       }
+    });
+
+    window.addEventListener("pagehide", () => {
+      handleBackgroundDisarm();
+    });
+
+    document.addEventListener("freeze", () => {
+      handleBackgroundDisarm();
     });
 
     // ========================================================================
@@ -1544,24 +1633,45 @@
       try {
         const plan = await CortexAPI.analyzeVisionTarget(goal, base64Data);
 
+        // 🛑 SAFETY SUPERVISOR: Strict numeric telemetry and confirmation validation
+        const distNum = Number(plan.distance_cm);
+        const bearingNum = Number(plan.bearing_deg);
+        const isValidTarget = plan.target && typeof plan.target === 'string' && 
+                              !plan.target.toLowerCase().includes("not found") && 
+                              !plan.target.toLowerCase().includes("error") && 
+                              plan.target.trim().length > 0;
+
+        if (!Number.isFinite(distNum) || !Number.isFinite(bearingNum) || !isValidTarget) {
+          document.getElementById("hudLog").innerText = "[AI SUPERVISOR] ⚠️ No confirmed target or invalid telemetry. Autonomous motion vetoed.";
+          document.getElementById("aiStatTarget").innerText = plan.target || "Target Not Found";
+          document.getElementById("aiStatDist").innerText = "--";
+          document.getElementById("aiStatReason").innerText = plan.reasoning || "No valid target recognized in camera frame.";
+          const reticle = document.getElementById("targetReticle");
+          if (reticle) reticle.style.display = "none";
+          const btnExecute = document.getElementById("btnExecuteAiPlan");
+          if (btnExecute) btnExecute.style.display = "none";
+          pendingAiPlan = null;
+          return;
+        }
+
         // Update glowing HUD card immediately below camera
-        document.getElementById("aiStatTarget").innerText = plan.target || "Object Found";
-        document.getElementById("aiStatDist").innerText = `${plan.distance_cm} cm (${plan.bearing_deg > 0 ? '+' : ''}${plan.bearing_deg}°)`;
+        document.getElementById("aiStatTarget").innerText = plan.target;
+        document.getElementById("aiStatDist").innerText = `${distNum} cm (${bearingNum > 0 ? '+' : ''}${bearingNum}°)`;
         document.getElementById("aiStatReason").innerText = plan.reasoning || "Target located in camera frame.";
 
         // 🎯 HUD TARGET RETICLE OVERLAY
         const reticle = document.getElementById("targetReticle");
         if (reticle) {
           reticle.style.display = "block";
-          const offsetPct = Math.max(18, Math.min(82, 50 + (plan.bearing_deg || 0) * 0.9));
+          const offsetPct = Math.max(18, Math.min(82, 50 + bearingNum * 0.9));
           reticle.style.left = `${offsetPct}%`;
           reticle.style.top = "50%";
         }
 
         triggerHaptic('double');
 
-        if (!rxTxChar) {
-          document.getElementById("hudLog").innerText = `[SPOTTED] ${plan.target} @ ${plan.distance_cm}cm! (Droid offline)`;
+        if (!rxTxChar && !isUsbConnected) {
+          document.getElementById("hudLog").innerText = `[SPOTTED] ${plan.target} @ ${distNum}cm! (Droid offline)`;
           return;
         }
 
@@ -1569,46 +1679,82 @@
         await sendCommand("V");
         await new Promise(r => setTimeout(r, 200));
 
-        gAiVisionAborted = false;
-        document.getElementById("hudLog").innerText = `[DRIVING] Moving toward ${plan.target}...`;
+        // Whitelist, duration clamp (50-500ms), and 4-action cap
+        const allowedCmds = ['F', 'B', 'L', 'R', 'S'];
+        const boundedActions = (plan.actions || []).slice(0, 4).filter(step => {
+          const cmd = (step.cmd || '').toUpperCase();
+          return allowedCmds.includes(cmd) && Number.isFinite(Number(step.duration_ms));
+        }).map(step => ({
+          cmd: step.cmd.toUpperCase(),
+          duration_ms: Math.min(500, Math.max(50, Number(step.duration_ms) || 200))
+        }));
 
-        if (plan.actions && plan.actions.length > 0) {
-          const allowedCmds = ['F', 'B', 'L', 'R', 'S'];
-          const boundedActions = plan.actions.slice(0, 4); // Max 4 bounded steps
-          
-          for (const step of boundedActions) {
-            if (gAiVisionAborted) {
-              sendCommand("S");
-              document.getElementById("hudLog").innerText = "[AI] Navigation aborted by pilot.";
-              break;
-            }
-            const cleanCmd = (step.cmd || 'S').toUpperCase();
-            if (!allowedCmds.includes(cleanCmd)) continue; // Drop rogue mode changes!
-            
-            const clampedDuration = Math.min(500, Math.max(50, step.duration_ms || 200)); // Clamp 50ms - 500ms
-            document.getElementById("hudLog").innerText = `[MOVING] Action '${cleanCmd}' (${clampedDuration}ms)...`;
-            
-            await sendCommand(cleanCmd);
-            await new Promise(r => setTimeout(r, clampedDuration));
-            await sendCommand("S"); // Inter-step safety brake
-            await new Promise(r => setTimeout(r, 60));
-          }
-          
-          await sendCommand("S");
-          if (!gAiVisionAborted) {
-            await new Promise(r => setTimeout(r, 100));
-            await sendCommand("G"); // Celebration greeting chirp!
-            document.getElementById("hudLog").innerText = `[REACHED] Target Reached: ${plan.target}!`;
-          }
-          if (reticle) reticle.style.display = "none";
+        if (boundedActions.length === 0) {
+          document.getElementById("hudLog").innerText = `[SPOTTED] ${plan.target} spotted, but no safe actions proposed.`;
+          return;
         }
+
+        // 🛑 SAFETY SUPERVISOR: Model output is treated as a PROPOSED PLAN ONLY!
+        // Never execute directly into motors — require active press-and-hold confirmation!
+        pendingAiPlan = boundedActions;
+        const btnExecute = document.getElementById("btnExecuteAiPlan");
+        if (btnExecute) {
+          btnExecute.style.display = "block";
+          btnExecute.innerText = `🟢 HOLD TO EXECUTE: Move toward ${plan.target} (${boundedActions.length} steps)`;
+        }
+        document.getElementById("hudLog").innerText = `[PROPOSED PLAN] ⚠️ Press & HOLD green button below to execute (${boundedActions.length} steps). Release to halt!`;
       } catch (err) {
         console.error("Gemini Vision Error:", err);
         const reticle = document.getElementById("targetReticle");
         if (reticle) reticle.style.display = "none";
+        const btnExecute = document.getElementById("btnExecuteAiPlan");
+        if (btnExecute) btnExecute.style.display = "none";
+        pendingAiPlan = null;
         document.getElementById("hudLog").innerText = `[ERROR] ${err.message}`;
         document.getElementById("aiStatTarget").innerText = "⚠️ Error";
         document.getElementById("aiStatReason").innerText = err.message;
+      }
+    }
+
+    async function startSupervisedAiPlan() {
+      if (!pendingAiPlan || pendingAiPlan.length === 0 || isSupervisingAiPlan) return;
+      isSupervisingAiPlan = true;
+      gAiVisionAborted = false;
+      document.getElementById("hudLog").innerText = "[AI SUPERVISOR] 🚀 Executing proposed plan under live human supervision...";
+
+      const reticle = document.getElementById("targetReticle");
+      for (const step of pendingAiPlan) {
+        if (gAiVisionAborted || !isSupervisingAiPlan) {
+          sendCommand("S");
+          document.getElementById("hudLog").innerText = "[AI SUPERVISOR] 🛑 Button released: instant deadman halt!";
+          break;
+        }
+        document.getElementById("hudLog").innerText = `[SUPERVISED STEP] '${step.cmd}' (${step.duration_ms}ms)...`;
+        await sendCommand(step.cmd);
+        await new Promise(r => setTimeout(r, step.duration_ms));
+        await sendCommand("S");
+        await new Promise(r => setTimeout(r, 60));
+      }
+
+      await sendCommand("S");
+      if (!gAiVisionAborted && isSupervisingAiPlan) {
+        await new Promise(r => setTimeout(r, 100));
+        await sendCommand("G");
+        document.getElementById("hudLog").innerText = "[REACHED] Proposed plan completed successfully!";
+        const btnExecute = document.getElementById("btnExecuteAiPlan");
+        if (btnExecute) btnExecute.style.display = "none";
+        pendingAiPlan = null;
+      }
+      if (reticle) reticle.style.display = "none";
+      isSupervisingAiPlan = false;
+    }
+
+    function abortSupervisedAiPlan() {
+      if (isSupervisingAiPlan) {
+        isSupervisingAiPlan = false;
+        gAiVisionAborted = true;
+        sendCommand("S");
+        document.getElementById("hudLog").innerText = "[AI SUPERVISOR] 🛑 Operator released control: motors halted.";
       }
     }
 
@@ -1701,17 +1847,15 @@
           if (avg > 70) {
             clearInterval(interval);
             stream.getTracks().forEach(t => t.stop());
-            shiftGear(3, 'e');
-            sendCommand("F");
-            document.getElementById("hudLog").innerText = `[VOICE] 🚀 SHOUT DETECTED! (Lvl ${Math.round(avg)}) -> TURBO DASH!`;
-            setTimeout(() => sendCommand("S"), 800);
+            triggerHaptic('heavy');
+            sendCommand("h"); // Sonic horn blast on shout (no unguarded motor motion!)
+            document.getElementById("hudLog").innerText = `[VOICE] 📯 SHOUT DETECTED! (Lvl ${Math.round(avg)}) -> S2-R2-D2 Horn Blast!`;
           } else if (avg > 12 && avg < 42 && checkCount > 15) {
             clearInterval(interval);
             stream.getTracks().forEach(t => t.stop());
-            shiftGear(1, 'q');
-            sendCommand("F");
-            document.getElementById("hudLog").innerText = `[VOICE] 🐢 WHISPER DETECTED! (Lvl ${Math.round(avg)}) -> STEALTH CRAWL`;
-            setTimeout(() => sendCommand("S"), 600);
+            triggerHaptic('light');
+            sendCommand("A"); // Gentle affirmative chirp on whisper (no unguarded motor motion!)
+            document.getElementById("hudLog").innerText = `[VOICE] 🤫 WHISPER DETECTED! (Lvl ${Math.round(avg)}) -> S2-R2-D2 Affirmative Murmur`;
           }
 
           checkCount++;
@@ -2281,9 +2425,7 @@
     }
 
     async function streamPixelArtRealtime() {
-      const bytes = [];
-      bytes.push(0x4D); // 'M'
-
+      let hexStr = 'M';
       for (let row = 0; row < 8; row++) {
         let b = 0;
         for (let col = 0; col < 8; col++) {
@@ -2291,31 +2433,10 @@
             b |= (1 << (7 - col));
           }
         }
-        bytes.push(b);
+        hexStr += b.toString(16).padStart(2, '0').toUpperCase();
       }
-
-      const data = new Uint8Array(bytes);
-      if (isUsbConnected && serialWriter) {
-        try {
-          await serialWriter.write(data);
-          return;
-        } catch(e) {
-          console.warn("Pixel matrix USB TX error:", e);
-        }
-      }
-      if (rxTxChar) {
-        try {
-          if (rxTxChar.writeValueWithoutResponse) {
-            await rxTxChar.writeValueWithoutResponse(data);
-          } else if (rxTxChar.writeValueWithResponse) {
-            await rxTxChar.writeValueWithResponse(data);
-          } else if (rxTxChar.writeValue) {
-            await rxTxChar.writeValue(data);
-          }
-        } catch(e) {
-          console.warn("Pixel matrix BLE TX error:", e);
-        }
-      }
+      hexStr += '\n';
+      await sendCommand(hexStr);
     }
 
     async function connectBluetooth() {
@@ -2369,12 +2490,7 @@
       rxTxChar = null;
       bluetoothDevice = null;
 
-      stopDriveHeartbeat();
-      stopGyroHeartbeat();
-      stopMissionKeepalive();
-
-      lastFlowCmd = 'S';
-      isTouchingPad = false;
+      disarmAll();
       bleWriteQueue = [];
       isBleWriting = false;
 
@@ -2406,11 +2522,7 @@
           serialPort = null;
           isUsbConnected = false;
 
-          stopDriveHeartbeat();
-          stopGyroHeartbeat();
-          stopMissionKeepalive();
-          lastFlowCmd = 'S';
-          isTouchingPad = false;
+          disarmAll();
           bleWriteQueue = [];
           isBleWriting = false;
 
@@ -2565,6 +2677,9 @@
           }
           if (first === '@' || first === 'W') {
             cmd = sanitizeAscii(cmd);
+            // 🛑 Strict length-limiting: limit banner text payload to max 16 chars to prevent firmware buffer overflow
+            const body = cmd.slice(1).replace(/[\r\n]/g, '').trim().slice(0, 16);
+            cmd = `${first} ${body} \n`;
           }
         }
 
@@ -2644,9 +2759,7 @@
       sendCommand(cmdChar);
     }
 
-    let currentActiveMission = null;
-    let missionStartTime = 0;
-    let missionTimerInterval = null;
+
 
     const MISSION_DETAILS = {
       '5': { title: "♟️ THE KING'S SECOND", detail: "Active Pilot Escort • Sonar Tracking 18-80cm • Sweeping Flanks", tab: 2 },
@@ -2673,7 +2786,6 @@
       if (patrolEl) patrolEl.innerText = `${mins}m ${secs}s`;
     }
 
-    let missionKeepaliveTimer = null;
     function startMissionKeepalive() {
       stopMissionKeepalive();
       missionKeepaliveTimer = setInterval(() => {
@@ -2683,13 +2795,6 @@
           stopMissionKeepalive();
         }
       }, 600);
-    }
-
-    function stopMissionKeepalive() {
-      if (missionKeepaliveTimer) {
-        clearInterval(missionKeepaliveTimer);
-        missionKeepaliveTimer = null;
-      }
     }
 
     async function triggerMode(modeChar, desc) {
@@ -2762,33 +2867,7 @@
 
     async function cancelActiveMission() {
       triggerHaptic('heavy');
-      currentActiveMission = null;
-      clearInterval(missionTimerInterval);
-      stopMissionKeepalive();
-      stopPomodoro();
-
-      await sendCommand('S'); // Stop robot and return to RC mode
-
-      const hud = document.getElementById("activeMissionHud");
-      if (hud) hud.style.display = "none";
-
-      document.querySelectorAll(".feature-card").forEach(card => {
-        card.classList.remove("mission-active-card");
-        const btn = card.querySelector(".btn-card-action");
-        if (btn && btn.getAttribute("data-original-text")) {
-          btn.innerText = btn.getAttribute("data-original-text");
-          btn.style.background = "";
-          btn.style.color = "";
-          btn.style.borderColor = "";
-        }
-      });
-
-      const metric = document.getElementById("sentryStatusMetric");
-      if (metric) {
-        metric.innerText = "⚪ SENTRY STANDBY";
-        metric.style.color = "var(--subtext)";
-      }
-
+      disarmAll();
       document.getElementById("hudLog").innerText = "[STAND DOWN] 🛑 Autonomous Mission Disengaged • Manual Control Active";
     }
 
@@ -2805,17 +2884,7 @@
     // ========================================================================
     // 📱 TILT STEERING ENGINE (CALIBRATED ACCELEROMETER DRIVE)
     // ========================================================================
-    let lastGyroCmd = 'S';
-    let gyroHeartbeatTimer = null;
-    let baselineBeta = null;
-    let baselineGamma = null;
 
-    function stopGyroHeartbeat() {
-      if (gyroHeartbeatTimer) {
-        clearInterval(gyroHeartbeatTimer);
-        gyroHeartbeatTimer = null;
-      }
-    }
 
     function startGyroHeartbeat() {
       stopGyroHeartbeat();
@@ -2897,6 +2966,18 @@
     window.addEventListener('DOMContentLoaded', () => {
       initClockAndWeather();
       initPixelGrid();
+
+      const btnExecute = document.getElementById("btnExecuteAiPlan");
+      if (btnExecute) {
+        btnExecute.addEventListener("pointerdown", (e) => {
+          e.preventDefault();
+          triggerHaptic('medium');
+          startSupervisedAiPlan();
+        });
+        btnExecute.addEventListener("pointerup", abortSupervisedAiPlan);
+        btnExecute.addEventListener("pointercancel", abortSupervisedAiPlan);
+        btnExecute.addEventListener("pointerleave", abortSupervisedAiPlan);
+      }
     });
   </script>
 </body>
