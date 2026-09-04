@@ -196,6 +196,10 @@ This project was born from a **collaborative multi-agent round table**, where Sh
 
 1. Download the free **[Arduino IDE](https://www.arduino.cc/en/software)** on your computer.
 2. Open the file **`firmware/MultiModeSuperRobot/MultiModeSuperRobot.ino`**.
+   > 📎 **One sketch, one truth.** This repo file is the only real copy. The old
+   > convenience path `~/KidsbitsRobot/MultiModeSuperRobot/MultiModeSuperRobot.ino`
+   > is now a **symlink** to it, so opening either one edits the same code and the
+   > two can never drift apart again.
 3. Plug the USB cable into S2-R2-D2:
    > ⚠️ **TOP SECRET MAKER PRO-TIP:** Slide the physical **`BT` switch under the robot to `OFF`** before uploading! *(This keeps the radio lines clear for the code upload!)*
    * Select **Board: Arduino Uno** and choose your USB port.
