@@ -726,6 +726,19 @@
       <button class="btn-toggle-mini" id="btnEmergencyBrake" style="border-color:var(--danger); color:var(--danger); padding:8px 0; font-size:0.7rem; min-height:48px; display:flex; align-items:center; justify-content:center;" onclick="emergencyStop()" aria-label="Emergency Brake">🛑 BRAKE</button>
     </div>
 
+    <!-- 🎬 TEACH A TRICK (RECORD & REPLAY) -->
+    <div style="width:100%; background:var(--card-bg); border:1px solid rgba(0,245,212,0.3); border-radius:12px; padding:8px 12px; margin-bottom:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <span style="font-size:0.75rem; font-weight:800; color:var(--neon-green);">🎬 TEACH A TRICK</span>
+        <span id="trickStatusLabel" style="font-size:0.65rem; font-weight:700; color:var(--subtext);">No trick saved yet</span>
+      </div>
+      <div style="width:100%; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+        <button class="btn-toggle-mini" id="btnRecordTrick" style="border-color:var(--neon-green); color:var(--neon-green); padding:8px 0; font-size:0.7rem;" onclick="toggleTrickRecording()" aria-label="Record a trick">⏺️ RECORD</button>
+        <button class="btn-toggle-mini" id="btnPlayTrick" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:8px 0; font-size:0.7rem;" onclick="toggleTrickReplay()" aria-label="Play back the saved trick">▶️ PLAY</button>
+      </div>
+      <div style="font-size:0.58rem; color:var(--subtext); text-align:center; margin-top:4px;">Record yourself driving, then S2-R2-D2 drives it back exactly the same way.</div>
+    </div>
+
     <!-- 🎨 DRAW ON DROID FACE -->
     <div class="pixel-matrix-card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -1172,6 +1185,7 @@
       stopDriveHeartbeat();
       stopGyroHeartbeat();
       stopMissionKeepalive();
+      stopTrickReplay(); // 🎬 a taught trick is autonomous motion: it dies here too
 
       // 2. Disarm gyro tilt steering
       gyroActive = false;
@@ -1428,6 +1442,7 @@
         lastFlowCmd = targetCmd;
         triggerHaptic(targetCmd === 'S' ? 'light' : 'medium');
         sendCommand(targetCmd);
+        recordTrickStep(targetCmd);
         if (targetCmd !== 'S') {
           startDriveHeartbeat(targetCmd);
         } else {
@@ -1455,6 +1470,7 @@
       lastFlowCmd = 'S';
       if (wasActive) {
         sendCommand('S'); // Stop packet sent FIRST before UI/DOM mutations
+        recordTrickStep('S');
       }
       flowThumb.style.left = "50%";
       flowThumb.style.top  = "50%";
@@ -2737,7 +2753,161 @@
       else if (gearNum === 2) onSpeedSliderChange(65);
       else if (gearNum === 3) onSpeedSliderChange(100);
       sendCommand(cmdChar);
+      recordTrickStep(cmdChar);
     }
+
+    // ========================================================================
+    // 🎬 TEACH A TRICK — record up to 20s of driving, then play it back.
+    //
+    // SAFETY NOTE: replay is the one place the droid moves with nobody holding
+    // a control, so it is fenced in:
+    //   • it will not start unless the Pilot tab is on screen and the droid is
+    //     linked, so the pilot is always looking at the robot;
+    //   • every step goes out through the normal bleWriteQueue with the same
+    //     150ms drive heartbeat as the thumb pad, so the FIRMWARE's own 400ms
+    //     RC deadman still governs — drop the link and the robot stops itself;
+    //   • stopTrickReplay() is wired into disarmAll(), which already runs on
+    //     the emergency brake, tab blur, visibilitychange, pagehide and freeze;
+    //   • the very last thing a replay does is send 'S'.
+    // ========================================================================
+    const TRICK_MAX_MS = 20000;
+    const TRICK_MAX_STEPS = 120;
+    const TRICK_STORAGE_KEY = 's2r2d2_taught_trick';
+
+    let trickSteps = [];
+    let isRecordingTrick = false;
+    let isReplayingTrick = false;
+    let trickRecordStart = 0;
+    let trickRecordTimeout = null;
+    let trickReplayTimer = null;
+
+    function updateTrickUi(message) {
+      const label = document.getElementById("trickStatusLabel");
+      if (label) {
+        label.innerText = message !== undefined ? message
+          : (trickSteps.length ? `Trick saved • ${trickSteps.length} moves` : "No trick saved yet");
+        label.style.color = isRecordingTrick ? "var(--danger)"
+          : (isReplayingTrick ? "var(--neon-green)" : "var(--subtext)");
+      }
+      const rec = document.getElementById("btnRecordTrick");
+      if (rec) rec.innerText = isRecordingTrick ? "⏹️ STOP REC" : "⏺️ RECORD";
+      const play = document.getElementById("btnPlayTrick");
+      if (play) play.innerText = isReplayingTrick ? "⏹️ STOP" : "▶️ PLAY";
+    }
+
+    function recordTrickStep(cmd) {
+      if (!isRecordingTrick || isReplayingTrick) return;
+      if (typeof cmd !== 'string' || cmd.length === 0) return;
+      const elapsed = Date.now() - trickRecordStart;
+      if (elapsed > TRICK_MAX_MS || trickSteps.length >= TRICK_MAX_STEPS) {
+        stopTrickRecording();
+        return;
+      }
+      trickSteps.push({ t: elapsed, cmd: cmd });
+    }
+
+    function stopTrickRecording() {
+      if (!isRecordingTrick) return;
+      isRecordingTrick = false;
+      clearTimeout(trickRecordTimeout);
+      trickRecordTimeout = null;
+      // Always finish a trick with a stop, so a replay can never end rolling.
+      if (trickSteps.length && trickSteps[trickSteps.length - 1].cmd !== 'S') {
+        trickSteps.push({ t: Date.now() - trickRecordStart, cmd: 'S' });
+      }
+      try {
+        localStorage.setItem(TRICK_STORAGE_KEY, JSON.stringify(trickSteps));
+      } catch (e) { console.warn("[Trick] could not save:", e); }
+      updateTrickUi();
+      const hud = document.getElementById("hudLog");
+      if (hud) hud.innerText = trickSteps.length
+        ? `[TRICK] 🎬 Learned it! ${trickSteps.length} moves saved. Tap PLAY.`
+        : "[TRICK] 🎬 Nothing to learn — drive while recording next time!";
+    }
+
+    function toggleTrickRecording() {
+      triggerHaptic('medium');
+      if (isRecordingTrick) { stopTrickRecording(); return; }
+      if (isReplayingTrick) stopTrickReplay();
+      trickSteps = [];
+      isRecordingTrick = true;
+      trickRecordStart = Date.now();
+      trickRecordTimeout = setTimeout(stopTrickRecording, TRICK_MAX_MS);
+      updateTrickUi("Recording… drive now!");
+      const hud = document.getElementById("hudLog");
+      if (hud) hud.innerText = "[TRICK] ⏺️ Watching you drive — you have 20 seconds!";
+    }
+
+    function stopTrickReplay(reason) {
+      if (trickReplayTimer) { clearTimeout(trickReplayTimer); trickReplayTimer = null; }
+      if (!isReplayingTrick) return;
+      isReplayingTrick = false;
+      stopDriveHeartbeat();
+      sendCommand('S');
+      updateTrickUi();
+      const hud = document.getElementById("hudLog");
+      if (hud && reason) hud.innerText = reason;
+    }
+
+    function runTrickStep(index) {
+      if (!isReplayingTrick) return;
+      const step = trickSteps[index];
+      if (!step) { stopTrickReplay("[TRICK] ✅ Trick finished!"); return; }
+
+      sendCommand(step.cmd);
+      if (isMotionCommand(step.cmd) && step.cmd !== 'S' && step.cmd !== 's') {
+        startDriveHeartbeat(step.cmd);
+      } else {
+        stopDriveHeartbeat();
+      }
+
+      const next = trickSteps[index + 1];
+      if (!next) {
+        trickReplayTimer = setTimeout(() => stopTrickReplay("[TRICK] ✅ Trick finished!"), 250);
+        return;
+      }
+      const gap = Math.max(0, Math.min(5000, next.t - step.t));
+      trickReplayTimer = setTimeout(() => runTrickStep(index + 1), gap);
+    }
+
+    function toggleTrickReplay() {
+      triggerHaptic('medium');
+      const hud = document.getElementById("hudLog");
+      if (isReplayingTrick) { stopTrickReplay("[TRICK] 🛑 Replay stopped."); return; }
+      if (isRecordingTrick) stopTrickRecording();
+      if (!trickSteps.length) {
+        if (hud) hud.innerText = "[TRICK] Tap RECORD first, then drive a little!";
+        return;
+      }
+      if (!rxTxChar) {
+        if (hud) hud.innerText = "[TRICK] Link the droid first — it cannot hear you yet.";
+        return;
+      }
+      // Only replay while the pilot is actually watching the Pilot tab.
+      const pane = document.getElementById("tabPane1");
+      if (!pane || !pane.classList.contains("active")) {
+        if (hud) hud.innerText = "[TRICK] Open the Pilot tab to watch the trick.";
+        return;
+      }
+      isReplayingTrick = true;
+      updateTrickUi("Playing the trick…");
+      if (hud) hud.innerText = "[TRICK] ▶️ Watch! S2-R2-D2 is doing your trick. Tap BRAKE to stop.";
+      runTrickStep(0);
+    }
+
+    (function loadSavedTrick() {
+      try {
+        const raw = localStorage.getItem(TRICK_STORAGE_KEY);
+        if (!raw) { updateTrickUi(); return; }
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          trickSteps = parsed
+            .filter(s => s && typeof s.cmd === 'string' && s.cmd.length === 1 && typeof s.t === 'number')
+            .slice(0, TRICK_MAX_STEPS);
+        }
+      } catch (e) { trickSteps = []; }
+      updateTrickUi();
+    })();
 
 
 
