@@ -107,6 +107,7 @@ const uint16_t kPivotMsPerDegree = 3; // 270ms / 90 deg = 3 ms/deg (~0.333 deg/m
 
 // Safety Watchdog & Deadman Timer (400ms RC deadman, 1500ms autonomous keepalive)
 unsigned long gLastMotionCmdTime = 0;
+unsigned long gLastEchoMicros   = 0; // raw sonar flight time of the last ping (0 = no echo) — Echo Lab
 volatile unsigned long gLastKeepaliveTime = 0;
 bool gMotorActive = false;
 uint8_t gSonarGoodCount = 0;
@@ -850,8 +851,20 @@ void checkControlInput() {
       Serial.print(gMasterMute ? 1 : 0);
       Serial.print(F("|BOOTS:"));
       Serial.print(missionCount);
+      Serial.print(F("|MODE:"));
+      Serial.print((uint8_t)gCurrentMode);
       Serial.print(F("|FREE:"));
       Serial.println(getStackFreeBytes());
+    }
+    // 23. Echo Lab probe ('='): one ping, raw flight time in microseconds + the cm the
+    // droid computes from it. Shivansh measures the wall with a tape and works out the
+    // speed of sound himself: speed = 2 x distance / time. No motion, no mode change.
+    else if (ch == '=') {
+      uint16_t cm = getDistanceCm(); // same read as every mode, same fault latches
+      Serial.print(F("ECHO:"));
+      Serial.print(gLastEchoMicros);
+      Serial.print(F("us|CM:"));
+      Serial.println(cm);
     }
     // 22. Phone Heading Hint ('~' + signed degrees + '\n') — DATA, NOT A COMMAND.
     // When the pilot turns his phone during Follow Me, the cockpit whispers
@@ -2614,6 +2627,7 @@ uint16_t getDistanceCm() {
   digitalWrite(kPinUltrasonicTrig, LOW);
 
   unsigned long duration = pulseIn(kPinUltrasonicEcho, HIGH, 25000); // 25ms max timeout (~4.2m)
+  gLastEchoMicros = duration;
   static uint8_t sonarConsecutiveZeroes = 0;
   if (duration == 0) {
     sonarConsecutiveZeroes++;
