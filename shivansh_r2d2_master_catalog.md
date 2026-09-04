@@ -26,7 +26,7 @@
   │ 🚀 TAB 1: PILOT       │ 🛡️ TAB 2: PROTECT      │ 👁️ TAB 3: DISCOVER    │ 🎉 TAB 4: CELEBRATE   │
   │ (Drive & Face)        │ (Sentry & Patrol)      │ (Vision AI & 4K)      │ (Games & Jukebox)     │
   ├───────────────────────┼────────────────────────┼───────────────────────┼───────────────────────┤
-  │ 🌊 360° Drift Pad     │ ♟️ The King's Second   │ 👁️ Smart Camera (Find) │ 💃 360° Dance ('K')   │
+  │ 🌊 360° Drift Pad     │ 🐕 Follow Me           │ 👁️ Smart Camera (Find) │ 💃 360° Dance ('K')   │
   │ ⚙️ 3-Speed Gearbox    │ 🚪 Sicilian Fortress   │ ♟️ Grandmaster Chess   │ 🎯 Party Spin ('U')   │
   │ 📯 Honk Horn & Brake  │ 🌙 Night Sentry        │ 👑 Royal Briefing     │ 📻 Morse Academy      │
   │ 📱 Tilt Steer (Motion)│ ☕ Desk Companion      │ 🎙️ Vocal Gemini Brain │ 🔘 Telegraph Key      │
@@ -52,7 +52,7 @@
 ---
 
 ### 🛡️ Tab 2: `PROTECT` (Autonomous Sentry & Patrol Engines)
-* **♟️ The King's Second (Mode 5):** Dynamic escort patrol — tracks pilot stride (18-80cm) and sweeps flanks.
+* **🐕 Follow Me (Mode 5):** Dynamic escort patrol — tracks pilot stride (18-80cm) and sweeps flanks.
 * **🚪 The Sicilian Fortress (Mode 9):** Stationary entrance defense — greets arriving visitors and counts guests.
 * **🌙 King's Indian Perimeter (Mode 6):** Photocell darkness trap — alarms with siren & flashbang if someone approaches.
 * **☕ Desk Companion Patrol (Mode 7):** Tabletop patrol — dual underside IR sensors prevent falling off desk edges.

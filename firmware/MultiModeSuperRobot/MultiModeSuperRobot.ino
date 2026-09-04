@@ -53,7 +53,7 @@ enum RobotMode {
   MODE_LINE_TRACKING      = 2,
   MODE_BLUETOOTH_RC       = 3,
   MODE_LIGHT_SHOW         = 4,
-  MODE_LIVING_PET         = 5,
+  MODE_LIVING_PET         = 5,  // Mode 5: Follow Me
   MODE_FLASHBANG_AMBUSH   = 6,
   MODE_CLIFF_DETECTION    = 7,
   MODE_AIR_SYNTHESIZER    = 8,
@@ -99,6 +99,11 @@ volatile bool gMasterMute = false; // Default to Sound Enabled!
 uint8_t gDriveSpeed = 120;
 uint8_t gTurnSpeed  = 110;
 
+// Pivot calibration derived from runKnightLPathManeuver:
+// 270ms at PWM 185 produces a 90-degree pivot (~0.333 deg/ms, or 3 ms per degree).
+const uint8_t kPivotCalibratedPwm = 185;
+const uint16_t kPivotMsPerDegree = 3; // 270ms / 90 deg = 3 ms/deg (~0.333 deg/ms)
+
 // Safety Watchdog & Deadman Timer (400ms RC deadman, 1500ms autonomous keepalive)
 unsigned long gLastMotionCmdTime = 0;
 volatile unsigned long gLastKeepaliveTime = 0;
@@ -117,6 +122,7 @@ unsigned long gCliffLastStateChangeTime = 0;
 
 // Filter State
 float gFollowFilteredDist = 20.0f;
+float gLatestRawDist = 0.0f; // Unfiltered nearest sonar return for immediate safety stop
 float gDistanceHistory[5] = {20.0f, 20.0f, 20.0f, 20.0f, 20.0f};
 uint8_t gHistoryIdx = 0;
 unsigned long gLastIdleChirpTime = 0;
@@ -314,7 +320,7 @@ void runObstacleMode();
 void runLineTrackingMode();
 void runBluetoothMode(char cmd);
 void runLightShowMode();
-void runLivingPetEngine();
+void runLivingPetEngine(); // Mode 5: Follow Me
 void runFlashbangAmbushMode();
 void runCliffDetectionMode();
 void runSpatialAirSynthesizer();
@@ -1081,59 +1087,68 @@ void runLightShowMode() {
 }
 
 /**
- * Enhanced Persona 2: The Living Pet Companion & Autonomous Human Escort (Stanford Safe Architecture)
+ * Mode 5: Follow Me (Living Pet Companion & Autonomous Human Follow)
  */
 void runLivingPetEngine() {
   float dist = getFilteredDistance();
+  float rawDist = gLatestRawDist;
   if (Serial.available()) { haltMotors(); return; }
 
-  // FAIL-SAFE: If sensor wire is disconnected, halt immediately!
-  if (gSonarFault) {
-    haltMotors();
-    displayBitmap(kIconBrake);
-    delay(40);
-    return;
-  }
-
-  const float kSafeStopDist = 18.0f; // Any obstacle closer than 18cm triggers immediate brake/standby
-  const float kSweetSpotMax = 28.0f; // Sweet spot up to 28cm
+  const float kSafeStopDist = 25.0f; // Unfiltered nearest obstacle stop (immediate brake/standby within 25cm)
+  const float kSweetSpotMax = 32.0f; // Sweet spot up to 32cm
   const float kMaxLeashDist = 80.0f; // Dynamic human leg tracking up to 80cm
 
   static unsigned long lastLostTime = 0;
   static unsigned long lastChirpTrillTime = 0;
   static int scanDir = 1;
+  static float lastValidDist = 0.0f;
 
   // 1. Initial Handshake Lock Ritual (Wait for Pilot to stand in front before rolling!)
   if (!gFollowLockAcquired) {
     haltMotors();
     displayBitmap(kIconStandby);
-    
+
     // Interrogative sonar pulse
     if (millis() % 700 < 40) {
       if (!gMasterMute) { tone(kPinBuzzer1, 1400); delay(20); noTone(kPinBuzzer1); }
     }
 
     if (dist >= 10.0f && dist <= kMaxLeashDist) {
-      // ✅ TARGET ACQUIRED! Complete Knight Handshake Ceremony
+      // Explicit cliff check before handshake nod
+      if (digitalRead(kPinLineSensorLeft) == 0 || digitalRead(kPinLineSensorRight) == 0 || gCliffFault) {
+        haltMotors();
+        gFollowLockAcquired = false;
+        displayBitmap(kIconCliffGuard);
+        return;
+      }
+
+      // ✅ TARGET ACQUIRED! Complete Follow Me Handshake Ceremony
       gFollowLockAcquired = true;
       haltMotors();
-      displayBitmap(kIconChessKnight);
-      delay(180);
+      displayBitmap(kIconFollowPuppy);
+      safeMotorDelay(180, false, false);
       displayBitmap(kIconCrown);
-      // Eager 1cm nod toward King Shivansh
-      driveForward(120); delay(50); haltMotors();
+      // Eager 1cm nod toward pilot (cliff guarded + polled delay)
+      driveForward(120);
+      if (!safeMotorDelay(50, true, false)) {
+        haltMotors();
+        gFollowLockAcquired = false;
+        return;
+      }
+      haltMotors();
       talkAstromech(EMOTION_HAPPY);
       lastLostTime = millis();
       lastChirpTrillTime = millis();
+      lastValidDist = dist;
     }
-    delay(40);
+    safeMotorDelay(40, false, false);
     return;
   }
 
-  // 2. Petting & IMMEDIATE BRAKE (< 18cm -> Contiguous collision stop, zero gap!)
-  if (dist > 0.0f && dist < kSafeStopDist) {
+  // 2. IMMEDIATE UNFILTERED COLLISION STOP (< 25cm -> Immediate brake, zero median delay!)
+  if (rawDist > 0.0f && rawDist < kSafeStopDist) {
     haltMotors();
-    if (dist < 12.0f) {
+    if (rawDist < 12.0f) {
       displayBitmap(kIconHeart);
       if (millis() - lastChirpTrillTime > 2500) {
         talkAstromech(EMOTION_HAPPY);
@@ -1144,54 +1159,87 @@ void runLivingPetEngine() {
       stopAllAudio();
     }
     lastLostTime = millis();
-    delay(40);
+    lastValidDist = rawDist;
+    safeMotorDelay(40, false, false);
     return;
   }
 
-  // 3. Grandmaster Sweet Spot (18cm - 28cm -> Standby & Subtle Diagonal Flank Scan)
+  // 3. Follow Me Sweet Spot (25cm - 32cm -> Standby & Subtle Flank Scan)
   if (dist >= kSafeStopDist && dist <= kSweetSpotMax) {
     haltMotors();
-    displayBitmap(kIconChessKnight);
+    displayBitmap(kIconFollowPuppy);
     stopAllAudio();
     lastLostTime = millis();
+    lastValidDist = dist;
 
-    // Subtle Grandmaster Diagonal Flank Scan every 2400ms
+    // Subtle Follow Me Flank Scan every 2400ms (calibrated 15° at PWM 185)
     static unsigned long lastFlankScan = 0;
     if (millis() - lastFlankScan > 2400) {
       lastFlankScan = millis();
-      pivotLeft(110); delay(35); haltMotors(); delay(40);
-      pivotRight(110); delay(70); haltMotors(); delay(40);
-      pivotLeft(110); delay(35); haltMotors();
+      const uint16_t flankMs = 15 * kPivotMsPerDegree; // 15° = 45ms at PWM 185
+      pivotLeft(kPivotCalibratedPwm);
+      if (!safeMotorDelay(flankMs, true, false)) { haltMotors(); gFollowLockAcquired = false; return; }
+      haltMotors();
+      safeMotorDelay(40, false, false);
+      pivotRight(kPivotCalibratedPwm);
+      if (!safeMotorDelay(flankMs * 2, true, false)) { haltMotors(); gFollowLockAcquired = false; return; }
+      haltMotors();
+      safeMotorDelay(40, false, false);
+      pivotLeft(kPivotCalibratedPwm);
+      if (!safeMotorDelay(flankMs, true, false)) { haltMotors(); gFollowLockAcquired = false; return; }
+      haltMotors();
     }
-    delay(30);
+    safeMotorDelay(30, false, false);
   }
-  // 4. Human Walking Away (28cm - 80cm -> Smooth Proportional Follow)
+  // 4. Human Walking Away (32cm - 80cm -> Smooth Proportional Follow)
   else if (dist > kSweetSpotMax && dist <= kMaxLeashDist) {
+    // Explicit cliff check immediately before forward leg
+    if (digitalRead(kPinLineSensorLeft) == 0 || digitalRead(kPinLineSensorRight) == 0 || gCliffFault) {
+      haltMotors();
+      gFollowLockAcquired = false;
+      displayBitmap(kIconCliffGuard);
+      return;
+    }
+
     displayBitmap(kArrowForward);
-    // Smooth proportional speed curve (115 PWM gentle to 215 PWM sprint)
-    uint8_t followSpeed = map(constrain((long)dist, 28, 80), 28, 80, 115, 215);
+    // Capped follow speed (0.2-0.25 m/s): 115 PWM gentle to 170 PWM cruise ceiling
+    uint8_t followSpeed = map(constrain((long)dist, (long)kSweetSpotMax, 80), (long)kSweetSpotMax, 80, 115, 170);
     driveForward(followSpeed);
+    if (!safeMotorDelay(30, true, false)) {
+      haltMotors();
+      gFollowLockAcquired = false;
+      return;
+    }
     lastLostTime = millis();
-    delay(30);
+    lastValidDist = dist;
   }
-  // 5. Lost Target / Out of Range (>80cm / 999cm) -> Saccadic Radar Scan
+  // 5. Lost Target / Out of Range (>80cm / No Echo) -> Saccadic Radar Scan
   else {
     haltMotors();
     displayBitmap(kIconStandby);
 
-    // If lost for more than 400ms, gently search left/right
-    if (millis() - lastLostTime > 400 && millis() - lastLostTime < 2500) {
-      if (scanDir > 0) pivotRight(120);
-      else pivotLeft(120);
-      delay(90);
+    // Safety rule: Do NOT pivot after a close-range loss: child may be standing beside wheels
+    bool wasCloseRange = (lastValidDist > 0.0f && lastValidDist < 35.0f);
+
+    // If lost for > 400ms, gently search left/right ONLY if not lost at close range
+    if (!wasCloseRange && millis() - lastLostTime > 400 && millis() - lastLostTime < 2500) {
+      const uint16_t searchMs = 25 * kPivotMsPerDegree; // 25° = 75ms at PWM 185
+      if (scanDir > 0) pivotRight(kPivotCalibratedPwm);
+      else pivotLeft(kPivotCalibratedPwm);
+      if (!safeMotorDelay(searchMs, true, false)) {
+        haltMotors();
+        gFollowLockAcquired = false;
+        return;
+      }
       haltMotors();
-      delay(60);
+      safeMotorDelay(60, false, false);
 
       float checkDist = getDistanceCm();
       if (checkDist >= kSafeStopDist && checkDist <= kMaxLeashDist) {
         lastLostTime = millis(); // Re-acquired target!
-        
-        // 4-Second Audio & Heart Debounce (Prevents chirp spam on fast steps!)
+        lastValidDist = checkDist;
+
+        // Audio & Heart Debounce
         if (millis() - lastChirpTrillTime > 4000) {
           displayBitmap(kIconHeart);
           talkAstromech(EMOTION_HAPPY);
@@ -1205,7 +1253,7 @@ void runLivingPetEngine() {
       gFollowLockAcquired = false;
       haltMotors();
       digitalWrite(kPinStatusLed, (millis() / 400) % 2);
-      delay(60);
+      safeMotorDelay(60, false, false);
     }
   }
 }
@@ -2242,6 +2290,7 @@ float getDistanceCm() {
 
 float getFilteredDistance() {
   float raw = getDistanceCm();
+  gLatestRawDist = raw;
   if (raw > 0.0f && raw < 400.0f) {
     gDistanceHistory[gHistoryIdx] = raw;
     gHistoryIdx = (gHistoryIdx + 1) % 5;

@@ -174,7 +174,7 @@ async def run_controller_session() -> None:
         print("   P <0-255>     : Set Throttle PWM (e.g. 'P 150')")
         print("   J <1-4>       : Play Melody (1: Star Wars | 2: R2 | 3: Mario | 4: Spy)")
         print("   W <text>      : Scroll Text Banner on Matrix Face")
-        print("   0 - 9         : Autonomous Modes (1: Obstacle | 2: Line | 5: Pet)")
+        print("   0 - 9         : Autonomous Modes (1: Obstacle | 2: Line | 5: Follow Me)")
         print("   exit / quit   : Disconnect & Safe Halt")
         print("-" * 58)
 

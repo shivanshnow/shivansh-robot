@@ -265,7 +265,7 @@ Every playful beep and turn in S2-R2-D2 is backed by real, published scientific 
 5. **Tactical Threat Evaluation & Operational Space Control**:
    * *Shannon, C. E. (1950). Programming a Computer for Playing Chess.* Philosophical Magazine, 41(314), 256-275.
    * *Khatib, O. (1987). A Unified Approach to Motion and Force Control of Robot Manipulators: The Operational Space Formulation.* IEEE J. Robotics and Automation.
-   * *Applied in*: Centipawn Security Evaluation Bar ($-10.0$ to $+10.0$ cp) and Grandmaster Sentry state machines (*The King's Second, Sicilian Fortress, King's Indian*).
+   * *Applied in*: Centipawn Security Evaluation Bar ($-10.0$ to $+10.0$ cp) and Grandmaster Sentry state machines (*Follow Me, Sicilian Fortress, King's Indian*).
 
 6. **Sub-Kilobyte Zero-Heap Embedded Schedulability**:
    * *Liu, C. L., & Layland, J. W. (1973). Scheduling Algorithms for Multiprogramming in a Hard-Real-Time Environment.* Journal of the ACM, 20(1), 46-61.
