@@ -950,6 +950,15 @@
         <button class="btn-toggle-mini" style="border-color:var(--neon-green); color:var(--neon-green); padding:8px 0;" onclick="analyzePhysicalChessboard()" aria-label="Scan Physical Chessboard">♟️ SCAN CHESSBOARD</button>
       </div>
       <button class="btn-toggle-mini" style="width:100%; margin-top:6px; border-color:var(--neon-purple); color:var(--neon-purple); padding:8px 0;" onclick="askWhatDoYouSee()" aria-label="Ask the droid what it can see">👀 WHAT DO YOU SEE?</button>
+      <!-- 🔊 ECHO LAB: one ping, the raw flight time, and a sum he does himself. Sends '=' only. -->
+      <div style="margin-top:8px; padding:8px; border:1px solid var(--neon-cyan); border-radius:8px;">
+        <div style="font-size:11px; letter-spacing:1px; color:var(--neon-cyan);">🔊 ECHO LAB · MEASURE THE SPEED OF SOUND</div>
+        <div style="display:flex; gap:6px; align-items:center; margin-top:6px;">
+          <input id="echoTapeCm" type="number" inputmode="numeric" min="5" max="400" placeholder="tape: cm to the wall" aria-label="Tape-measured distance to the wall in centimetres" style="flex:1; min-width:0; background:rgba(0,0,0,.35); color:#fff; border:1px solid var(--neon-cyan); border-radius:6px; padding:6px 8px; font-size:13px;">
+          <button class="btn-toggle-mini" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:6px 10px;" onclick="echoLabPing()" aria-label="Fire one sonar ping at the wall">📡 PING</button>
+        </div>
+        <div id="echoLabOut" style="font-family:monospace; font-size:12px; margin-top:6px; color:var(--neon-cyan); white-space:pre-line;">Point the droid at a wall, measure the gap with a tape, press PING.</div>
+      </div>
       <input type="text" class="cortex-input" id="aiGoalInput" placeholder="Type target to find (e.g. 'Find my mug', 'Find blue keys')">
       <!-- 🛡️ SUPERVISED AI PLAN EXECUTION BUTTON (Deadman Hold-to-Execute) -->
       <button class="btn-toggle-mini" id="btnExecuteAiPlan" style="display:none; width:100%; margin-top:6px; background:rgba(0, 245, 212, 0.15); border-color:var(--neon-green); color:var(--neon-green); font-weight:800; padding:10px 0; font-size:0.75rem; user-select:none; -webkit-user-select:none;" aria-label="Press and Hold to Execute AI Plan">
@@ -2548,6 +2557,45 @@
     }
 
     // ========================================================================
+    // 🔊 ECHO LAB — the droid fires one ping ('=') and replies ECHO:<us>|CM:<n>.
+    // Speed of sound = 2 x tape distance / flight time. The reply arrives as DATA
+    // on the same telemetry path as the diary; nothing here can move a motor.
+    // ========================================================================
+    let echoLabPending = false;
+    function echoLabPing() {
+      const out = document.getElementById('echoLabOut');
+      if (!out) return;
+      if (!rxTxChar) { out.innerText = 'Link the droid first, then press PING.'; return; }
+      echoLabPending = true;
+      out.innerText = 'PING\u2026 listening for the echo';
+      sendCommand('=');
+      setTimeout(() => {
+        if (!echoLabPending) return;
+        echoLabPending = false;
+        out.innerText = 'No echo came back. Is the droid facing a wall closer than 4 m?';
+      }, 1500);
+    }
+    function echoLabShow(us, cm) {
+      echoLabPending = false;
+      const out = document.getElementById('echoLabOut');
+      if (!out) return;
+      const tape = parseFloat((document.getElementById('echoTapeCm') || {}).value);
+      let s = `\u23F1 echo: ${us} \u00B5s  \u00B7  the droid says ${cm} cm`;
+      if (us > 0 && Number.isFinite(tape) && tape > 0) {
+        const speed = (2 * tape / 100) / (us / 1e6);
+        s += `\n\uD83D\uDCCF tape: ${tape} cm  \u2192  2 \u00D7 ${tape} cm \u00F7 ${us} \u00B5s = ${speed.toFixed(0)} m/s`;
+        s += Math.abs(speed - 343) < 25
+          ? '\n\uD83C\uDFAF That is the speed of sound. You just measured it.'
+          : '\n\uD83E\uDD14 Not 343 m/s \u2014 is the sonar square to the wall? Try again.';
+      } else if (us > 0) {
+        s += '\nType the tape distance above and PING again to work out the speed.';
+      } else {
+        s += '\nNo echo. Sound went out and never came back \u2014 nothing within 4 m.';
+      }
+      out.innerText = s;
+    }
+
+    // ========================================================================
     // 📖 DROID DIARY — the droid says how many times it has woken up.
     // SAFETY: everything arriving over BLE is DATA. It is never eval'd, never
     // dispatched as a command, and never echoed back out. Only a line that
@@ -2567,6 +2615,11 @@
         while ((nl = bleRxBuffer.indexOf("\n")) !== -1) {
           const line = bleRxBuffer.slice(0, nl).trim();
           bleRxBuffer = bleRxBuffer.slice(nl + 1);
+          if (line.indexOf("ECHO:") === 0) { // Echo Lab reply: numbers only, shown, never executed
+            const em = line.match(/^ECHO:(\d{1,7})us\|CM:(\d{1,4})$/);
+            if (em) echoLabShow(parseInt(em[1], 10), parseInt(em[2], 10));
+            continue;
+          }
           if (droidDiaryGreeted) continue;
           if (line.indexOf("S2-R2-D2|") !== 0) continue; // not ours: ignore entirely
           const m = line.match(/\|BOOTS:(\d{1,6})/);
