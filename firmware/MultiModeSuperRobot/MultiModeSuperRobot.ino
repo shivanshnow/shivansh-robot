@@ -121,10 +121,10 @@ uint8_t gLastLeftCliffState = 1;
 uint8_t gLastRightCliffState = 1;
 unsigned long gCliffLastStateChangeTime = 0;
 
-// Filter State
-float gFollowFilteredDist = 20.0f;
-float gLatestRawDist = 0.0f; // Unfiltered nearest sonar return for immediate safety stop
-float gDistanceHistory[5] = {20.0f, 20.0f, 20.0f, 20.0f, 20.0f};
+// Filter State (Fixed-point integer mm/cm to eliminate IEEE-754 software float library)
+uint16_t gFollowFilteredDist = 20;
+uint16_t gLatestRawDist = 0; // Unfiltered nearest sonar return for immediate safety stop
+uint16_t gDistanceHistory[5] = {20, 20, 20, 20, 20};
 uint8_t gHistoryIdx = 0;
 unsigned long gLastIdleChirpTime = 0;
 bool gFollowLockAcquired = false;
@@ -146,8 +146,8 @@ BearingMemory gLastBearing = {BEARING_CENTER, 0, 0};
 bool gLdrHealthy = false;
 bool gPirHealthy = false;
 
-// Pentatonic Scale for Air Synthesizer
-const unsigned int kPentatonicScale[10] = {
+// Pentatonic Scale for Air Synthesizer (PROGMEM saves 20 bytes of static RAM)
+const uint16_t PROGMEM kPentatonicScale[10] = {
   440, 494, 554, 659, 740, 880, 988, 1109, 1318, 1480
 };
 
@@ -313,7 +313,7 @@ void chirpSweep(int startF, int endF, int step, int delayMs);
 void chirpWarble(int f1, int f2, int reps, int durMs);
 void talkAstromech(DroidEmotion emotion);
 void talkDialogue(DialoguePhrase phrase);
-void playDopplerRadarPing(float distanceCm);
+void playDopplerRadarPing(uint16_t distanceCm);
 void checkBiologicalRespiration();
 void chirpAccelerate();
 void chirpBrake();
@@ -328,8 +328,8 @@ void driveBackward(uint8_t speed);
 void pivotLeft(uint8_t speed);
 void pivotRight(uint8_t speed);
 void arcDrive(uint8_t leftPwm, uint8_t rightPwm);
-float getDistanceCm();
-float getFilteredDistance();
+uint16_t getDistanceCm();
+uint16_t getFilteredDistance();
 int readActivePhotocell();
 int sampleLdrWithHealth();
 bool checkPirMotionDetected();
@@ -365,11 +365,36 @@ void playStarWars();
 void playR2D2Chirps();
 void playSuperMario();
 void playMissionImpossible();
+uint16_t getStackFreeBytes();
 
 /* ============================================================================
  * SECTION 5: Main Setup, Persistence & Loop
  * ============================================================================
  */
+
+// 🛡️ Stack Watermarking: Paints unused SRAM with 0xC5 at boot to measure peak stack depth
+extern uint8_t _end;
+extern uint8_t __stack;
+
+void paintStack(void) __attribute__((naked, section(".init1"), used));
+void paintStack(void) {
+  __asm volatile (
+    "  ldi r30, lo8(_end)\n  ldi r31, hi8(_end)\n"
+    "  ldi r24, 0xC5\n      ldi r25, hi8(__stack)\n"
+    "0:cpi r30, lo8(__stack)\n  cpc r31, r25\n  brsh 1f\n"
+    "  st  Z+, r24\n        rjmp 0b\n1:\n" ::);
+}
+
+uint16_t getStackFreeBytes() {
+  const uint8_t *p = &_end;
+  uint16_t freeCount = 0;
+  while (p <= &__stack && *p == 0xC5) {
+    freeCount++;
+    p++;
+  }
+  return freeCount;
+}
+
 void loadEepromSettings() {
   if (EEPROM.read(EEPROM_MAGIC_ADDR) == EEPROM_MAGIC_VAL) {
     gMasterMute = (EEPROM.read(EEPROM_MUTE_ADDR) == 1);
@@ -731,7 +756,12 @@ void checkControlInput() {
       }
       if (strlen(p) > 0) {
         char banner[32];
-        snprintf(banner, sizeof(banner), " %s ", p);
+        uint8_t pLen = strlen(p);
+        if (pLen > sizeof(banner) - 3) pLen = sizeof(banner) - 3;
+        banner[0] = ' ';
+        memcpy(banner + 1, p, pLen);
+        banner[pLen + 1] = ' ';
+        banner[pLen + 2] = '\0';
         haltMotors();
         scrollTextAcrossMatrix(banner, 45);
         haltMotors();
@@ -752,7 +782,12 @@ void checkControlInput() {
       }
       if (strlen(p) > 0) {
         char banner[32];
-        snprintf(banner, sizeof(banner), " %s ", p);
+        uint8_t pLen = strlen(p);
+        if (pLen > sizeof(banner) - 3) pLen = sizeof(banner) - 3;
+        banner[0] = ' ';
+        memcpy(banner + 1, p, pLen);
+        banner[pLen + 1] = ' ';
+        banner[pLen + 2] = '\0';
         scrollTextAcrossMatrix(banner, 45);
         displayBitmap(kIconCrown);
       }
@@ -805,7 +840,9 @@ void checkControlInput() {
       Serial.print(F("|MUTE:"));
       Serial.print(gMasterMute ? 1 : 0);
       Serial.print(F("|BOOTS:"));
-      Serial.println(missionCount);
+      Serial.print(missionCount);
+      Serial.print(F("|FREE:"));
+      Serial.println(getStackFreeBytes());
     }
   }
 }
@@ -834,8 +871,8 @@ void executeCurrentMode() {
   if (gCurrentMode == MODE_BLUETOOTH_RC && gMotorActive) {
     uint8_t leftCliff  = digitalRead(kPinLineSensorLeft);
     uint8_t rightCliff = digitalRead(kPinLineSensorRight);
-    float dist = getDistanceCm();
-    if (leftCliff == 0 || rightCliff == 0 || gCliffFault || (dist > 0.0f && dist < 15.0f)) {
+    uint16_t dist = getDistanceCm();
+    if (leftCliff == 0 || rightCliff == 0 || gCliffFault || (dist > 0 && dist < 15)) {
       haltMotors();
       gMotorActive = false;
       displayBitmap(kIconBrake);
@@ -896,8 +933,8 @@ bool safeMotorDelay(unsigned long ms, bool checkCliff, bool checkSonar) {
 
     // 4. Ultrasonic Sonar Obstacle Live Veto
     if (checkSonar) {
-      float dist = getDistanceCm();
-      if (gSonarFault || (dist > 0.0f && dist < 18.0f)) {
+      uint16_t dist = getDistanceCm();
+      if (gSonarFault || (dist > 0 && dist < 18)) {
         haltMotors();
         gMotorActive = false;
         return false;
@@ -941,11 +978,11 @@ void runObstacleMode() {
     return;
   }
 
-  float dist = getDistanceCm();
+  uint16_t dist = getDistanceCm();
   if (Serial.available()) { haltMotors(); return; }
 
   // FAIL-SAFE: If sensor wire is disconnected, timed out, or faulted, halt immediately!
-  if (gSonarFault || dist <= 0.0f) {
+  if (gSonarFault || dist == 0) {
     haltMotors();
     displayBitmap(kIconBrake);
     if (millis() % 1200 < 60) talkAstromech(EMOTION_ALERT);
@@ -954,7 +991,7 @@ void runObstacleMode() {
   }
 
   // 1. Close-Range Emergency Reflex (Enhanced 18cm cushion for thin chair legs!)
-  if (dist > 0.0f && dist < 18.0f) {
+  if (dist > 0 && dist < 18) {
     haltMotors();
     talkAstromech(EMOTION_ALERT); // Startled reflex chirp!
     driveBackward(kAutoDriveSpeed);
@@ -965,7 +1002,7 @@ void runObstacleMode() {
     haltMotors();
   }
   // 2. Proactive Look-Ahead Radar (36cm detection cushion with Doppler Radar Echolocation)
-  else if (dist > 0.0f && dist < 36.0f) {
+  else if (dist > 0 && dist < 36) {
     haltMotors();
     talkDialogue(PHRASE_HESITATION); // Inquisitive "Hmm... checking path options"
     displayBitmap(kArrowLeft);
@@ -973,7 +1010,7 @@ void runObstacleMode() {
     if (!safeMotorDelay(260, true, false)) { haltMotors(); return; }
     haltMotors();
     if (!safeMotorDelay(50, true, false)) return;
-    float leftDist = getDistanceCm();
+    uint16_t leftDist = getDistanceCm();
     playDopplerRadarPing(leftDist); // 🌊 Doppler acoustic distance ping
     if (!safeMotorDelay(30, true, false)) return;
 
@@ -982,11 +1019,11 @@ void runObstacleMode() {
     if (!safeMotorDelay(520, true, false)) { haltMotors(); return; }
     haltMotors();
     if (!safeMotorDelay(50, true, false)) return;
-    float rightDist = getDistanceCm();
+    uint16_t rightDist = getDistanceCm();
     playDopplerRadarPing(rightDist); // 🌊 Doppler acoustic distance ping
     if (!safeMotorDelay(30, true, false)) return;
 
-    if (leftDist > rightDist && leftDist > 30.0f) {
+    if (leftDist > rightDist && leftDist > 30) {
       displayBitmap(kArrowLeft);
       pivotLeft(kAutoTurnSpeed);
       if (!safeMotorDelay(520, true, false)) { haltMotors(); return; }
@@ -1080,8 +1117,8 @@ void runBluetoothMode(char cmd) {
     case 'F': case 'f': {
       uint8_t leftCliff  = digitalRead(kPinLineSensorLeft);
       uint8_t rightCliff = digitalRead(kPinLineSensorRight);
-      float dist = getDistanceCm();
-      if (leftCliff == 0 || rightCliff == 0 || gCliffFault || (dist > 0.0f && dist < 15.0f)) {
+      uint16_t dist = getDistanceCm();
+      if (leftCliff == 0 || rightCliff == 0 || gCliffFault || (dist > 0 && dist < 15)) {
         haltMotors();
         gMotorActive = false;
         displayBitmap(kIconBrake);
@@ -1112,18 +1149,18 @@ void runLightShowMode() {
  * Full Graceful Degradation Matrix & Continuous Bacterial Chemotaxis Arc-Drive
  */
 void runLivingPetEngine() {
-  float dist = getFilteredDistance();
-  float rawDist = gLatestRawDist;
+  uint16_t dist = getFilteredDistance();
+  uint16_t rawDist = gLatestRawDist;
   if (Serial.available()) { haltMotors(); return; }
 
-  const float kSafeStopDist = 25.0f; // Unfiltered nearest obstacle stop (immediate brake/standby within 25cm)
-  const float kSweetSpotMax = 32.0f; // Sweet spot up to 32cm
-  const float kMaxLeashDist = 80.0f; // Dynamic human leg tracking up to 80cm
+  const uint16_t kSafeStopDist = 25; // Unfiltered nearest obstacle stop (immediate brake/standby within 25cm)
+  const uint16_t kSweetSpotMax = 32; // Sweet spot up to 32cm
+  const uint16_t kMaxLeashDist = 80; // Dynamic human leg tracking up to 80cm
 
   static unsigned long lastLostTime = 0;
   static unsigned long lastChirpTrillTime = 0;
   static int scanDir = 1;
-  static float lastValidDist = 0.0f;
+  static uint16_t lastValidDist = 0;
   static int lastLdrVal = 0;
   static int8_t arcDirection = 1; // +1 = right arc bias, -1 = left arc bias
   static int16_t lastFollowErr = 0;
@@ -1170,7 +1207,7 @@ void runLivingPetEngine() {
     }
 
     bool lockTriggered = false;
-    if (sonarHealthy && dist >= 10.0f && dist <= kMaxLeashDist) {
+    if (sonarHealthy && dist >= 10 && dist <= kMaxLeashDist) {
       lockTriggered = true;
     } else if (!sonarHealthy && ldrHealthy && currentLdr > 250) {
       lockTriggered = true; // Sonar down: lock on optical beacon
@@ -1246,9 +1283,9 @@ void runLivingPetEngine() {
   }
 
   // 5. IMMEDIATE UNFILTERED COLLISION STOP (< 25cm -> Immediate brake, zero median delay!)
-  if (sonarHealthy && rawDist > 0.0f && rawDist < kSafeStopDist) {
+  if (sonarHealthy && rawDist > 0 && rawDist < kSafeStopDist) {
     haltMotors();
-    if (rawDist < 12.0f) {
+    if (rawDist < 12) {
       displayBitmap(kIconHeart);
       if (millis() - lastChirpTrillTime > 2500) {
         talkAstromech(EMOTION_HAPPY);
@@ -1340,13 +1377,13 @@ void runLivingPetEngine() {
         lastConicalScan = millis();
         const uint16_t kConicalMs = 20 * kPivotMsPerDegree; // 20° = 60ms at PWM 185
         
-        float dCenter = getDistanceCm();
+        uint16_t dCenter = getDistanceCm();
         
         pivotLeft(kPivotCalibratedPwm);
         if (!safeMotorDelay(kConicalMs, true, false)) { haltMotors(); gFollowLockAcquired = false; return; }
         haltMotors();
         safeMotorDelay(20, false, false);
-        float dLeft = getDistanceCm();
+        uint16_t dLeft = getDistanceCm();
         
         pivotRight(kPivotCalibratedPwm);
         if (!safeMotorDelay(kConicalMs, true, false)) { haltMotors(); gFollowLockAcquired = false; return; }
@@ -1357,7 +1394,7 @@ void runLivingPetEngine() {
         if (!safeMotorDelay(kConicalMs, true, false)) { haltMotors(); gFollowLockAcquired = false; return; }
         haltMotors();
         safeMotorDelay(20, false, false);
-        float dRight = getDistanceCm();
+        uint16_t dRight = getDistanceCm();
         
         pivotLeft(kPivotCalibratedPwm);
         if (!safeMotorDelay(kConicalMs, true, false)) { haltMotors(); gFollowLockAcquired = false; return; }
@@ -1365,11 +1402,11 @@ void runLivingPetEngine() {
         safeMotorDelay(20, false, false);
 
         // Steer to shortest return
-        float minD = 999.0f;
+        uint16_t minD = 999;
         FollowBearing bestB = BEARING_CENTER;
-        if (dCenter > 0.0f && dCenter < minD) { minD = dCenter; bestB = BEARING_CENTER; }
-        if (dLeft > 0.0f && dLeft < minD)     { minD = dLeft; bestB = BEARING_LEFT; }
-        if (dRight > 0.0f && dRight < minD)   { minD = dRight; bestB = BEARING_RIGHT; }
+        if (dCenter > 0 && dCenter < minD) { minD = dCenter; bestB = BEARING_CENTER; }
+        if (dLeft > 0 && dLeft < minD)     { minD = dLeft; bestB = BEARING_LEFT; }
+        if (dRight > 0 && dRight < minD)   { minD = dRight; bestB = BEARING_RIGHT; }
 
         if (minD <= kMaxLeashDist) {
           sonarBearing = bestB;
@@ -1451,7 +1488,7 @@ void runLivingPetEngine() {
     displayBitmap(kIconStandby);
 
     // Safety rule: Do NOT pivot after a close-range loss: child may be standing beside wheels
-    bool wasCloseRange = (lastValidDist > 0.0f && lastValidDist < 35.0f);
+    bool wasCloseRange = (lastValidDist > 0 && lastValidDist < 35);
 
     // If lost for > 400ms, gently search left/right ONLY if not lost at close range
     if (!wasCloseRange && millis() - lastLostTime > 400 && millis() - lastLostTime < 2500) {
@@ -1473,7 +1510,7 @@ void runLivingPetEngine() {
       haltMotors();
       safeMotorDelay(60, false, false);
 
-      float checkDist = getDistanceCm();
+      uint16_t checkDist = getDistanceCm();
       if (checkDist >= kSafeStopDist && checkDist <= kMaxLeashDist) {
         lastLostTime = millis(); // Re-acquired target!
         lastValidDist = checkDist;
@@ -1506,19 +1543,19 @@ void runSpatialAirSynthesizer() {
 
   int lightVal = readActivePhotocell();
   uint8_t noteIdx = map(constrain(lightVal, 60, 920), 60, 920, 0, 9);
-  unsigned int targetFreq = kPentatonicScale[noteIdx];
+  unsigned int targetFreq = pgm_read_word(&kPentatonicScale[noteIdx]);
 
-  float rightHandDist = getDistanceCm();
+  uint16_t rightHandDist = getDistanceCm();
   static uint8_t rhythmStep = 0;
   rhythmStep = (rhythmStep + 1) % 8;
 
   displayOscilloscope(noteIdx, rhythmStep);
 
   if (!gMasterMute) {
-    if (rightHandDist < 10.0f) {
+    if (rightHandDist < 10) {
       setBuzzerTone(targetFreq); delay(35);
       setBuzzerTone(targetFreq + 120); delay(35);
-    } else if (rightHandDist < 25.0f) {
+    } else if (rightHandDist < 25) {
       setBuzzerTone(targetFreq); delay(70);
       stopAllAudio(); delay(30);
     } else {
@@ -1535,12 +1572,12 @@ void runSpatialAirSynthesizer() {
  */
 void runApexSentryMode() {
   haltMotors();
-  static float lastDist = 100.0f;
-  float dist = getDistanceCm();
+  static uint16_t lastDist = 100;
+  uint16_t dist = getDistanceCm();
   bool pirTrigger = checkPirMotionDetected();
 
   // Approach detection: triggers when someone is within 1.2m and approaching or within 50cm
-  bool approachDetected = (dist > 8.0f && dist < 120.0f && (lastDist - dist > 6.0f || dist < 50.0f));
+  bool approachDetected = (dist > 8 && dist < 120 && ((int16_t)lastDist - (int16_t)dist > 6 || dist < 50));
   lastDist = dist;
 
   if (pirTrigger || approachDetected) {
@@ -1563,7 +1600,7 @@ void runApexSentryMode() {
 
 void runFlashbangAmbushMode() {
   haltMotors();
-  float dist = getDistanceCm();
+  uint16_t dist = getDistanceCm();
   bool heat = checkPirMotionDetected();
   if (Serial.available()) { haltMotors(); stopAllAudio(); return; }
 
@@ -1575,7 +1612,7 @@ void runFlashbangAmbushMode() {
     return;
   }
 
-  if (dist > 0.0f && dist < 45.0f && heat) {
+  if (dist > 0 && dist < 45 && heat) {
     displayBitmap(kIconSkullAlert);
     uint8_t ambushSpeed = (gCurrentGear == GEAR_PRECISION) ? 140 : 180;
     for (int i = 0; i < 4; i++) {
@@ -1694,11 +1731,11 @@ void runTableSafeJoyGreeting() {
     case 0: {
       displayBitmap(kIconCrown);
       if (!gMasterMute) {
-        int notes[] = { 440, 440, 440, 349, 523, 440, 349, 523, 440 };
-        int dur[]   = { 260, 260, 260, 180, 100, 260, 180, 100, 450 };
+        static const uint16_t PROGMEM notes[] = { 440, 440, 440, 349, 523, 440, 349, 523, 440 };
+        static const uint16_t PROGMEM dur[]   = { 260, 260, 260, 180, 100, 260, 180, 100, 450 };
         for (int i = 0; i < 9; i++) {
           if (Serial.available()) { haltMotors(); return; }
-          playTone(notes[i], dur[i]);
+          playTone(pgm_read_word(&notes[i]), pgm_read_word(&dur[i]));
           if (i == 3) displayBitmap(kIconHeart);
           if (i == 6) displayBitmap(kIconCrown);
           delay(30);
@@ -1716,11 +1753,11 @@ void runTableSafeJoyGreeting() {
     case 1: {
       displayBitmap(kIconChessKnight);
       if (!gMasterMute) {
-        int notes[] = { 523, 659, 784, 1046, 1318, 1046, 1318 };
-        int dur[]   = { 120, 120, 120,  220,  150,  120,  400 };
+        static const uint16_t PROGMEM notes[] = { 523, 659, 784, 1046, 1318, 1046, 1318 };
+        static const uint16_t PROGMEM dur[]   = { 120, 120, 120,  220,  150,  120,  400 };
         for (int i = 0; i < 7; i++) {
           if (Serial.available()) { haltMotors(); return; }
-          playTone(notes[i], dur[i]);
+          playTone(pgm_read_word(&notes[i]), pgm_read_word(&dur[i]));
           if (i == 3) displayBitmap(kIconCrown);
           delay(25);
         }
@@ -1921,11 +1958,11 @@ void playMorseLetter(char letter) {
 
 void playStarWars() {
   displayBitmap(kIconSkullAlert);
-  int notes[] = { 440, 440, 440, 349, 523, 440, 349, 523, 440 };
-  int durations[] = { 400, 400, 400, 280, 140, 400, 280, 140, 600 };
+  static const uint16_t PROGMEM notes[] = { 440, 440, 440, 349, 523, 440, 349, 523, 440 };
+  static const uint16_t PROGMEM durations[] = { 400, 400, 400, 280, 140, 400, 280, 140, 600 };
   for (int i = 0; i < 9; i++) {
     if (Serial.available()) break;
-    playTone(notes[i], durations[i]);
+    playTone(pgm_read_word(&notes[i]), pgm_read_word(&durations[i]));
     delay(50);
   }
 }
@@ -1942,22 +1979,22 @@ void playR2D2Chirps() {
 
 void playSuperMario() {
   displayBitmap(kIconHeart);
-  int notes[] = { 660, 660, 660, 510, 660, 770, 380 };
-  int durations[] = { 100, 100, 100, 100, 100, 100, 200 };
+  static const uint16_t PROGMEM notes[] = { 660, 660, 660, 510, 660, 770, 380 };
+  static const uint16_t PROGMEM durations[] = { 100, 100, 100, 100, 100, 100, 200 };
   for (int i = 0; i < 7; i++) {
     if (Serial.available()) break;
-    playTone(notes[i], durations[i]);
+    playTone(pgm_read_word(&notes[i]), pgm_read_word(&durations[i]));
     delay(60);
   }
 }
 
 void playMissionImpossible() {
   displayBitmap(kIconSentryEye);
-  int notes[] = { 587, 587, 698, 784, 587, 587, 523, 554 };
-  int durations[] = { 150, 150, 150, 150, 150, 150, 150, 150 };
+  static const uint16_t PROGMEM notes[] = { 587, 587, 698, 784, 587, 587, 523, 554 };
+  static const uint16_t PROGMEM durations[] = { 150, 150, 150, 150, 150, 150, 150, 150 };
   for (int i = 0; i < 8; i++) {
     if (Serial.available()) break;
-    playTone(notes[i], durations[i]);
+    playTone(pgm_read_word(&notes[i]), pgm_read_word(&durations[i]));
     delay(50);
   }
 }
@@ -2128,9 +2165,9 @@ void talkDialogue(DialoguePhrase phrase) {
     }
     case PHRASE_ECSTASY: {
       // Sparkling bubbling multi-octave arpeggio (Astromech bliss!)
-      int notes[] = { 880, 1175, 1397, 1760, 2093, 2637, 3136, 3520 };
+      static const uint16_t PROGMEM notes[] = { 880, 1175, 1397, 1760, 2093, 2637, 3136, 3520 };
       for (int i = 0; i < 8; i++) {
-        tone(kPinBuzzer1, notes[i]); delay(28);
+        tone(kPinBuzzer1, pgm_read_word(&notes[i])); delay(28);
       }
       chirpWarble(2400, 3200, 3, 15);
       noTone(kPinBuzzer1);
@@ -2212,8 +2249,8 @@ void runFatiguedMood() {
   displayBitmap(kIconQuietSleep);
 }
 
-void playDopplerRadarPing(float distanceCm) {
-  if (gMasterMute || distanceCm <= 0.0f || distanceCm > 120.0f) return;
+void playDopplerRadarPing(uint16_t distanceCm) {
+  if (gMasterMute || distanceCm == 0 || distanceCm > 120) return;
   int freq = map(constrain((long)distanceCm, 18, 80), 18, 80, 2200, 450);
   tone(kPinBuzzer1, freq);
   delay(12);
@@ -2515,12 +2552,12 @@ void arcDrive(uint8_t leftPwm, uint8_t rightPwm) {
   if (leftPwm > 0 || rightPwm > 0) gMotorActive = true;
 }
 
-float getDistanceCm() {
+uint16_t getDistanceCm() {
   // Stuck-high echo before trigger indicates hardware electrical fault
   if (digitalRead(kPinUltrasonicEcho) == HIGH) {
     gSonarFault = true;
     gSonarGoodCount = 0;
-    return 0.0f;
+    return 0;
   }
 
   digitalWrite(kPinUltrasonicTrig, LOW);
@@ -2529,7 +2566,7 @@ float getDistanceCm() {
   delayMicroseconds(10);
   digitalWrite(kPinUltrasonicTrig, LOW);
 
-  long duration = pulseIn(kPinUltrasonicEcho, HIGH, 25000); // 25ms max timeout (~4.2m)
+  unsigned long duration = pulseIn(kPinUltrasonicEcho, HIGH, 25000); // 25ms max timeout (~4.2m)
   static uint8_t sonarConsecutiveZeroes = 0;
   if (duration == 0) {
     sonarConsecutiveZeroes++;
@@ -2537,31 +2574,32 @@ float getDistanceCm() {
       gSonarFault = true; // 8 consecutive timeouts latches hardware fault
     }
     gSonarGoodCount = 0;
-    return 0.0f; // "No echo" means no target in range: return 0.0f
+    return 0; // "No echo" means no target in range: return 0
   }
   sonarConsecutiveZeroes = 0;
   gSonarGoodCount++;
   if (gSonarGoodCount >= 5) {
     gSonarFault = false; // Requires 5 consecutive valid readings to clear!
   }
-  return duration * 0.034f / 2.0f;
+  // Integer arithmetic: (duration + 29) / 58 cm
+  return (uint16_t)((duration + 29UL) / 58UL);
 }
 
-float getFilteredDistance() {
-  float raw = getDistanceCm();
+uint16_t getFilteredDistance() {
+  uint16_t raw = getDistanceCm();
   gLatestRawDist = raw;
-  if (raw > 0.0f && raw < 400.0f) {
+  if (raw > 0 && raw < 400) {
     gDistanceHistory[gHistoryIdx] = raw;
     gHistoryIdx = (gHistoryIdx + 1) % 5;
   }
 
   // 6-Line Median-of-5 Filter (Rejects acoustic dropouts and spikes completely)
-  float sorted[5];
+  uint16_t sorted[5];
   for (uint8_t i = 0; i < 5; i++) sorted[i] = gDistanceHistory[i];
   for (uint8_t i = 0; i < 4; i++) {
     for (uint8_t j = i + 1; j < 5; j++) {
       if (sorted[i] > sorted[j]) {
-        float tmp = sorted[i]; sorted[i] = sorted[j]; sorted[j] = tmp;
+        uint16_t tmp = sorted[i]; sorted[i] = sorted[j]; sorted[j] = tmp;
       }
     }
   }
