@@ -2474,6 +2474,7 @@
         hud.innerText = `[CORONATION] 👑 Welcome ${currentPilot}!`;
 
         setTimeout(() => sendCommand("G"), 200);
+        startDroidDiary(); // 📖 listen for the droid's own telemetry (silent if unsupported)
 
         bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
       } catch (err) {
@@ -2482,7 +2483,65 @@
       }
     }
 
+    // ========================================================================
+    // 📖 DROID DIARY — the droid says how many times it has woken up.
+    // SAFETY: everything arriving over BLE is DATA. It is never eval'd, never
+    // dispatched as a command, and never echoed back out. Only a line that
+    // starts with "S2-R2-D2|" is looked at, and only for its BOOTS number.
+    // If the characteristic cannot notify, the greeting is skipped silently.
+    // ========================================================================
+    let bleRxBuffer = "";
+    let droidDiaryGreeted = false;
+
+    function handleDroidTelemetry(event) {
+      try {
+        const chunk = new TextDecoder().decode(event.target.value);
+        bleRxBuffer += chunk;
+        if (bleRxBuffer.length > 512) bleRxBuffer = bleRxBuffer.slice(-512);
+
+        let nl;
+        while ((nl = bleRxBuffer.indexOf("\n")) !== -1) {
+          const line = bleRxBuffer.slice(0, nl).trim();
+          bleRxBuffer = bleRxBuffer.slice(nl + 1);
+          if (droidDiaryGreeted) continue;
+          if (line.indexOf("S2-R2-D2|") !== 0) continue; // not ours: ignore entirely
+          const m = line.match(/\|BOOTS:(\d{1,6})/);
+          if (!m) continue;
+          const boots = parseInt(m[1], 10);
+          if (!Number.isFinite(boots)) continue;
+          droidDiaryGreeted = true;
+          const hud = document.getElementById("hudLog");
+          if (hud) hud.innerText = `[DROID DIARY] 📖 Wake-up #${boots} — good morning, S2!`;
+        }
+      } catch (e) {
+        // Telemetry is a nicety, never a failure the pilot should see.
+        console.warn("[Droid Diary] parse skipped:", e);
+      }
+    }
+
+    async function startDroidDiary() {
+      bleRxBuffer = "";
+      droidDiaryGreeted = false;
+      try {
+        if (!rxTxChar || !rxTxChar.properties || !rxTxChar.properties.notify) return;
+        await rxTxChar.startNotifications();
+        rxTxChar.addEventListener('characteristicvaluechanged', handleDroidTelemetry);
+        sendCommand('?'); // ask once; the reply is the greeting
+      } catch (e) {
+        console.warn("[Droid Diary] notifications unavailable, greeting skipped:", e);
+      }
+    }
+
+    function stopDroidDiary() {
+      try {
+        if (rxTxChar) rxTxChar.removeEventListener('characteristicvaluechanged', handleDroidTelemetry);
+      } catch (e) {}
+      bleRxBuffer = "";
+      droidDiaryGreeted = false;
+    }
+
     function onDisconnected() {
+      stopDroidDiary();
       rxTxChar = null;
       bluetoothDevice = null;
 
