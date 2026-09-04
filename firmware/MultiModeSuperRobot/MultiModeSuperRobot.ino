@@ -853,6 +853,38 @@ void checkControlInput() {
       Serial.print(F("|FREE:"));
       Serial.println(getStackFreeBytes());
     }
+    // 22. Phone Heading Hint ('~' + signed degrees + '\n') — DATA, NOT A COMMAND.
+    // When the pilot turns his phone during Follow Me, the cockpit whispers
+    // which way he turned. This ONLY biases the bearing memory, so a droid
+    // that has lost him searches the right side first. It never touches a
+    // motor, never changes mode, and is ignored outside MODE_LIVING_PET.
+    // The payload is always drained to '\n' first, so its digits can never
+    // leak back into the parser as mode or motion commands.
+    // Deliberately does NOT refresh gLastKeepaliveTime: a passive hint must
+    // not be able to keep an unattended mission alive. The '!' keepalive at
+    // 600ms already covers mode 5.
+    else if (ch == '~') {
+      char hintBuf[8];
+      size_t n = readFramedPayload(hintBuf, sizeof(hintBuf));
+      if (n > 0 && gCurrentMode == MODE_LIVING_PET) {
+        char* p = hintBuf;
+        while (*p == ' ' || *p == '\t') p++;
+        int8_t sign = 1;
+        if (*p == '-') { sign = -1; p++; }
+        else if (*p == '+') p++;
+        if (isdigit(*p)) {
+          int16_t deg = 0;
+          uint8_t digits = 0;
+          while (isdigit(*p) && digits < 3) { deg = deg * 10 + (*p - '0'); p++; digits++; }
+          deg = constrain(deg, 0, 90) * sign;
+          if (deg <= -15 || deg >= 15) {
+            gLastBearing.bearing = (deg < 0) ? BEARING_LEFT : BEARING_RIGHT;
+            gLastBearing.confidence = 45; // moderate: a hint, not a sighting
+            gLastBearing.timestamp = millis();
+          }
+        }
+      }
+    }
   }
 }
 

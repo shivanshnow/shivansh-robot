@@ -1186,7 +1186,8 @@
       stopDriveHeartbeat();
       stopGyroHeartbeat();
       stopMissionKeepalive();
-      stopTrickReplay(); // 🎬 a taught trick is autonomous motion: it dies here too
+      stopTrickReplay();  // 🎬 a taught trick is autonomous motion: it dies here too
+      stopHeadingHint();  // 🧭 the Follow Me heading whisper stops with the mission
 
       // 2. Disarm gyro tilt steering
       gyroActive = false;
@@ -3009,6 +3010,8 @@
       
       await sendCommand(modeChar);
       startMissionKeepalive();
+      // 🧭 Follow Me is the only mission that listens for the heading hint.
+      if (modeChar === '5') startHeadingHint(); else stopHeadingHint();
 
       // 1. Show Global Active Mission Banner
       const hud = document.getElementById("activeMissionHud");
@@ -3094,6 +3097,74 @@
       }, 120);
     }
 
+    // ========================================================================
+    // 🧭 PHONE HEADING HINT — a whisper to the droid, never a command.
+    //
+    // While Follow Me (mode 5) runs, turning the phone tells the droid which
+    // way the pilot turned, so a droid that has lost him searches that side
+    // first. It sends ONLY the '~<±deg>' hint opcode, which the firmware
+    // treats as data: it biases the bearing memory and can never drive a
+    // motor or change a mode.
+    //
+    // Kept deliberately separate from handleOrientation() (tilt steering),
+    // which early-returns unless gyroActive. On iOS this listener attaches
+    // only if motion permission was ALREADY granted through the tilt-steer
+    // button — it never prompts for permission on its own.
+    // ========================================================================
+    let gOrientationPermissionGranted = false;
+    let headingHintActive = false;
+    let headingHintRef = null;
+    let headingHintLastDeg = 0;
+    let headingHintLastSent = 0;
+
+    function shortestAngleDelta(a, b) {
+      let d = (a - b) % 360;
+      if (d > 180) d -= 360;
+      if (d < -180) d += 360;
+      return d;
+    }
+
+    function handleHeadingHint(e) {
+      if (!headingHintActive || !rxTxChar) return;
+      const usingCompass = (typeof e.webkitCompassHeading === 'number' && isFinite(e.webkitCompassHeading));
+      const raw = usingCompass ? e.webkitCompassHeading : e.alpha;
+      if (typeof raw !== 'number' || !isFinite(raw)) return;
+
+      if (headingHintRef === null) { headingHintRef = raw; return; }
+
+      // webkitCompassHeading grows clockwise; alpha shrinks clockwise. Flip
+      // alpha so that positive always means "the pilot turned to his RIGHT".
+      let rel = shortestAngleDelta(raw, headingHintRef);
+      if (!usingCompass) rel = -rel;
+
+      if (Math.abs(rel - headingHintLastDeg) < 15) return; // only real turns
+      const now = Date.now();
+      if (now - headingHintLastSent < 200) return;          // at most 5 per second
+      headingHintLastSent = now;
+      headingHintLastDeg = rel;
+
+      const deg = Math.max(-90, Math.min(90, Math.round(rel)));
+      sendCommand(`~${deg >= 0 ? '+' : ''}${deg}\n`);
+    }
+
+    function startHeadingHint() {
+      if (headingHintActive) return;
+      if (typeof DeviceOrientationEvent === 'undefined') return;
+      if (typeof DeviceOrientationEvent.requestPermission === 'function' && !gOrientationPermissionGranted) return;
+      headingHintActive = true;
+      headingHintRef = null;   // reference resets each time Follow Me starts
+      headingHintLastDeg = 0;
+      headingHintLastSent = 0;
+      window.addEventListener('deviceorientation', handleHeadingHint);
+    }
+
+    function stopHeadingHint() {
+      if (!headingHintActive) return;
+      headingHintActive = false;
+      headingHintRef = null;
+      try { window.removeEventListener('deviceorientation', handleHeadingHint); } catch (e) {}
+    }
+
     function toggleGyroControl() {
       gyroActive = !gyroActive;
       const btn = document.getElementById("btnGyro");
@@ -3106,12 +3177,16 @@
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
           DeviceOrientationEvent.requestPermission()
             .then(perm => {
-              if (perm === 'granted') window.addEventListener('deviceorientation', handleOrientation);
+              if (perm === 'granted') {
+                gOrientationPermissionGranted = true;
+                window.addEventListener('deviceorientation', handleOrientation);
+              }
             })
             .catch(err => {
               console.warn("DeviceOrientation permission error:", err);
             });
         } else {
+          gOrientationPermissionGranted = true;
           window.addEventListener('deviceorientation', handleOrientation);
         }
         document.getElementById("hudLog").innerText = "[TILT STEER] Calibrating neutral angle... Hold phone steady!";
