@@ -107,6 +107,14 @@ uint8_t gSonarGoodCount = 0;
 bool gSonarFault = false;
 uint8_t gLineSweepStep = 0;
 
+// Cliff Sensor Health & Plausibility State
+bool gCliffFault = false;
+uint8_t gCliffRecoveryAttempts = 0;
+unsigned long gCliffForwardDriveStart = 0;
+uint8_t gLastLeftCliffState = 1;
+uint8_t gLastRightCliffState = 1;
+unsigned long gCliffLastStateChangeTime = 0;
+
 // Filter State
 float gFollowFilteredDist = 20.0f;
 float gDistanceHistory[5] = {20.0f, 20.0f, 20.0f, 20.0f, 20.0f};
@@ -263,6 +271,8 @@ void setMode(RobotMode newMode);
 void setGear(SpeedGear newGear);
 void checkControlInput();
 void executeCurrentMode();
+bool safeMotorDelay(unsigned long ms, bool checkCliff = true, bool checkSonar = false);
+size_t readFramedPayload(char* buffer, size_t maxLen, unsigned long timeoutMs = 120);
 
 void matrixInit();
 void displayBitmap(const uint8_t* bitmap);
@@ -436,6 +446,9 @@ void setMode(RobotMode newMode) {
   gLastIdleChirpTime = millis();
   gLastKeepaliveTime = millis();
   gLineSweepStep = 0;
+  gCliffRecoveryAttempts = 0;
+  gCliffForwardDriveStart = 0;
+  gCliffFault = false;
 
   if (newMode == MODE_LIVING_PET) {
     gFollowLockAcquired = false;
@@ -460,6 +473,45 @@ void setMode(RobotMode newMode) {
  * SECTION 7: Universal Command Parser & Bluetooth Protocol
  * ============================================================================
  */
+
+/**
+ * Safe Framed Payload Reader:
+ * Reads characters until '\n' into buffer (null-terminated).
+ * If the incoming payload exceeds maxLen-1, overflow is set and the remainder of the
+ * line is continuously drained until '\n' is reached.
+ * If overflow occurred or timeout expired before '\n', the buffer is cleared (buffer[0] = '\0')
+ * and 0 is returned.
+ * Invariant: NEVER leaves leftover payload characters in Serial to be misparsed as opcodes!
+ */
+size_t readFramedPayload(char* buffer, size_t maxLen, unsigned long timeoutMs) {
+  size_t count = 0;
+  bool overflow = false;
+  unsigned long start = millis();
+  while (millis() - start < timeoutMs) {
+    if (Serial.available()) {
+      start = millis(); // Reset timeout on each received byte
+      char c = (char)Serial.read();
+      if (c == '\n') {
+        if (overflow) {
+          if (maxLen > 0) buffer[0] = '\0';
+          return 0; // Oversized frame safely dropped; stream drained!
+        }
+        if (count < maxLen) buffer[count] = '\0';
+        else if (maxLen > 0) buffer[maxLen - 1] = '\0';
+        return count;
+      }
+      if (c == '\r') continue; // Ignore CR
+      if (count < maxLen - 1) {
+        buffer[count++] = c;
+      } else {
+        overflow = true; // Buffer capacity exceeded; continue draining until '\n'
+      }
+    }
+  }
+  // Timed out before '\n' reached: reject payload
+  if (maxLen > 0) buffer[0] = '\0';
+  return 0;
+}
 void checkControlInput() {
   while (Serial.available() > 0) {
     char ch = Serial.read();
@@ -471,11 +523,12 @@ void checkControlInput() {
       uint8_t bLen = 0;
       bannerBuf[bLen++] = ch;
       unsigned long bannerStart = millis();
-      while (millis() - bannerStart < 35 && bLen < 23) {
+      while (millis() - bannerStart < 35) {
         if (Serial.available()) {
+          bannerStart = millis();
           char b = Serial.read();
           if (b == '\n' || b == '\r') break;
-          bannerBuf[bLen++] = b;
+          if (bLen < sizeof(bannerBuf) - 1) bannerBuf[bLen++] = b;
         }
       }
       bannerBuf[bLen] = '\0';
@@ -545,8 +598,7 @@ void checkControlInput() {
     else if (ch == 'T' || ch == 't') {
       gLastKeepaliveTime = millis();
       char tBuf[8];
-      size_t n = Serial.readBytesUntil('\n', tBuf, sizeof(tBuf) - 1);
-      tBuf[n] = '\0';
+      size_t n = readFramedPayload(tBuf, sizeof(tBuf));
       if (n > 0) {
         char letter = tBuf[0];
         if (letter == '.') playMorseDit();
@@ -560,8 +612,7 @@ void checkControlInput() {
       haltMotors();
       gMotorActive = false;
       char jBuf[8];
-      size_t n = Serial.readBytesUntil('\n', jBuf, sizeof(jBuf) - 1);
-      jBuf[n] = '\0';
+      size_t n = readFramedPayload(jBuf, sizeof(jBuf));
       if (n > 0) {
         char song = jBuf[0];
         if (song == '1') playStarWars();
@@ -574,8 +625,7 @@ void checkControlInput() {
     else if (ch == 'M' || ch == 'm') {
       gLastKeepaliveTime = millis();
       char mBuf[24];
-      size_t n = Serial.readBytesUntil('\n', mBuf, sizeof(mBuf) - 1);
-      mBuf[n] = '\0';
+      size_t n = readFramedPayload(mBuf, sizeof(mBuf));
       uint8_t customBuf[8];
       bool valid = false;
       if (n == 16) {
@@ -592,9 +642,6 @@ void checkControlInput() {
           if (h < 0 || l < 0) { valid = false; break; }
           customBuf[i] = (uint8_t)((h << 4) | l);
         }
-      } else if (n == 8) {
-        for (int i = 0; i < 8; i++) customBuf[i] = (uint8_t)mBuf[i];
-        valid = true;
       }
       if (valid) {
         displayCustomBuffer(customBuf);
@@ -648,8 +695,7 @@ void checkControlInput() {
       haltMotors();
       gCurrentMode = MODE_BLUETOOTH_RC;
       char clockBanner[24];
-      size_t n = Serial.readBytesUntil('\n', clockBanner, sizeof(clockBanner) - 1);
-      clockBanner[n] = '\0';
+      size_t n = readFramedPayload(clockBanner, sizeof(clockBanner));
       char* p = clockBanner;
       while (*p == ' ' || *p == '\r' || *p == '\t') p++;
       int endIdx = (int)strlen(p) - 1;
@@ -670,8 +716,7 @@ void checkControlInput() {
       gLastKeepaliveTime = millis();
       haltMotors();
       char textBanner[24];
-      size_t n = Serial.readBytesUntil('\n', textBanner, sizeof(textBanner) - 1);
-      textBanner[n] = '\0';
+      size_t n = readFramedPayload(textBanner, sizeof(textBanner));
       char* p = textBanner;
       while (*p == ' ' || *p == '\r' || *p == '\t') p++;
       int endIdx = (int)strlen(p) - 1;
@@ -691,8 +736,7 @@ void checkControlInput() {
       haltMotors();
       gCurrentMode = MODE_BLUETOOTH_RC;
       char timeDigits[12];
-      size_t n = Serial.readBytesUntil('\n', timeDigits, sizeof(timeDigits) - 1);
-      timeDigits[n] = '\0';
+      size_t n = readFramedPayload(timeDigits, sizeof(timeDigits));
       char* p = timeDigits;
       while (*p == ' ' || *p == '\r' || *p == '\t') p++;
       if (strlen(p) >= 4 && isdigit(p[0]) && isdigit(p[1]) && isdigit(p[2]) && isdigit(p[3])) {
@@ -740,21 +784,34 @@ void checkControlInput() {
 }
 
 void executeCurrentMode() {
-  // 🛑 HOISTED UNIVERSAL DEADMAN WATCHDOG: Evaluated every iteration across all modes!
-  if (gMotorActive) {
-    if (gCurrentMode == MODE_BLUETOOTH_RC) {
-      if (millis() - gLastMotionCmdTime > 400) {
-        haltMotors();
-        gMotorActive = false;
-      }
-    } else if (gCurrentMode != MODE_STANDBY) {
-      // Autonomous modes require active client keepalive within 1500ms
-      if (millis() - gLastKeepaliveTime > 1500) {
-        haltMotors();
-        gMotorActive = false;
-        setMode(MODE_BLUETOOTH_RC);
-        displayBitmap(kIconBrake);
-      }
+  // 🛑 1. AUTONOMOUS DEADMAN: Evaluated on MODE ALONE, ungated by gMotorActive!
+  if (gCurrentMode != MODE_STANDBY && gCurrentMode != MODE_BLUETOOTH_RC) {
+    if (millis() - gLastKeepaliveTime > 1500) {
+      haltMotors();
+      gMotorActive = false;
+      setMode(MODE_BLUETOOTH_RC);
+      displayBitmap(kIconBrake);
+      return;
+    }
+  }
+
+  // 🛑 2. RC DEADMAN: Evaluated in Bluetooth RC mode when motors are active
+  if (gCurrentMode == MODE_BLUETOOTH_RC && gMotorActive) {
+    if (millis() - gLastMotionCmdTime > 400) {
+      haltMotors();
+      gMotorActive = false;
+    }
+  }
+
+  // 🛑 3. FIRMWARE INDEPENDENT SAFETY SUPERVISOR: Live cliff and sonar veto
+  if (gCurrentMode == MODE_BLUETOOTH_RC && gMotorActive) {
+    uint8_t leftCliff  = digitalRead(kPinLineSensorLeft);
+    uint8_t rightCliff = digitalRead(kPinLineSensorRight);
+    float dist = getDistanceCm();
+    if (leftCliff == 0 || rightCliff == 0 || gCliffFault || (dist > 0.0f && dist < 15.0f)) {
+      haltMotors();
+      gMotorActive = false;
+      displayBitmap(kIconBrake);
     }
   }
 
@@ -770,6 +827,59 @@ void executeCurrentMode() {
     case MODE_AIR_SYNTHESIZER:    runSpatialAirSynthesizer(); break;
     case MODE_APEX_SENTRY:        runApexSentryMode(); break;
   }
+}
+
+/**
+ * Polled non-blocking motor delay helper:
+ * Polls serial, keepalive expiry, cliff sensors, and sonar every 8-10ms.
+ * Returns false immediately if any stop condition or safety hazard triggers,
+ * cutting motor power and aborting the maneuver with <10ms latency.
+ */
+bool safeMotorDelay(unsigned long ms, bool checkCliff, bool checkSonar) {
+  unsigned long start = millis();
+  while (millis() - start < ms) {
+    // 1. Immediate Serial Abort ('S' or any incoming command)
+    if (Serial.available()) {
+      haltMotors();
+      gMotorActive = false;
+      return false;
+    }
+
+    // 2. Autonomous Keepalive Expiry Check
+    if (gCurrentMode != MODE_STANDBY && gCurrentMode != MODE_BLUETOOTH_RC) {
+      if (millis() - gLastKeepaliveTime > 1500) {
+        haltMotors();
+        gMotorActive = false;
+        setMode(MODE_BLUETOOTH_RC);
+        displayBitmap(kIconBrake);
+        return false;
+      }
+    }
+
+    // 3. Cliff Sensor Live Veto
+    if (checkCliff) {
+      uint8_t leftCliff  = digitalRead(kPinLineSensorLeft);
+      uint8_t rightCliff = digitalRead(kPinLineSensorRight);
+      if (leftCliff == 0 || rightCliff == 0 || gCliffFault) {
+        haltMotors();
+        gMotorActive = false;
+        return false;
+      }
+    }
+
+    // 4. Ultrasonic Sonar Obstacle Live Veto
+    if (checkSonar) {
+      float dist = getDistanceCm();
+      if (gSonarFault || (dist > 0.0f && dist < 18.0f)) {
+        haltMotors();
+        gMotorActive = false;
+        return false;
+      }
+    }
+
+    delay(8);
+  }
+  return true;
 }
 
 /* ============================================================================
@@ -792,11 +902,15 @@ void runObstacleMode() {
   // 🛑 CLIFF DETECTION FIRST (Table edge safety guard)
   uint8_t leftCliff = digitalRead(kPinLineSensorLeft);
   uint8_t rightCliff = digitalRead(kPinLineSensorRight);
-  if (leftCliff == 0 || rightCliff == 0) {
+  if (leftCliff == 0 || rightCliff == 0 || gCliffFault) {
     haltMotors();
     talkAstromech(EMOTION_ALERT);
-    driveBackward(kAutoDriveSpeed); delay(280); haltMotors();
-    pivotRight(kAutoTurnSpeed); delay(320); haltMotors();
+    driveBackward(kAutoDriveSpeed);
+    if (!safeMotorDelay(280, false, false)) { haltMotors(); return; }
+    haltMotors();
+    pivotRight(kAutoTurnSpeed);
+    if (!safeMotorDelay(320, false, false)) { haltMotors(); return; }
+    haltMotors();
     return;
   }
 
@@ -808,7 +922,7 @@ void runObstacleMode() {
     haltMotors();
     displayBitmap(kIconBrake);
     if (millis() % 1200 < 60) talkAstromech(EMOTION_ALERT);
-    delay(40);
+    safeMotorDelay(40, true, false);
     return;
   }
 
@@ -817,10 +931,10 @@ void runObstacleMode() {
     haltMotors();
     talkAstromech(EMOTION_ALERT); // Startled reflex chirp!
     driveBackward(kAutoDriveSpeed);
-    delay(280);
+    if (!safeMotorDelay(280, false, false)) { haltMotors(); return; }
     haltMotors();
     pivotRight(kAutoTurnSpeed);
-    delay(320);
+    if (!safeMotorDelay(320, true, false)) { haltMotors(); return; }
     haltMotors();
   }
   // 2. Proactive Look-Ahead Radar (36cm detection cushion with Doppler Radar Echolocation)
@@ -829,26 +943,26 @@ void runObstacleMode() {
     talkDialogue(PHRASE_HESITATION); // Inquisitive "Hmm... checking path options"
     displayBitmap(kArrowLeft);
     pivotLeft(kAutoTurnSpeed);
-    delay(260);
+    if (!safeMotorDelay(260, true, false)) { haltMotors(); return; }
     haltMotors();
-    delay(50);
+    if (!safeMotorDelay(50, true, false)) return;
     float leftDist = getDistanceCm();
     playDopplerRadarPing(leftDist); // 🌊 Doppler acoustic distance ping
-    delay(30);
+    if (!safeMotorDelay(30, true, false)) return;
 
     displayBitmap(kArrowRight);
     pivotRight(kAutoTurnSpeed);
-    delay(520);
+    if (!safeMotorDelay(520, true, false)) { haltMotors(); return; }
     haltMotors();
-    delay(50);
+    if (!safeMotorDelay(50, true, false)) return;
     float rightDist = getDistanceCm();
     playDopplerRadarPing(rightDist); // 🌊 Doppler acoustic distance ping
-    delay(30);
+    if (!safeMotorDelay(30, true, false)) return;
 
     if (leftDist > rightDist && leftDist > 30.0f) {
       displayBitmap(kArrowLeft);
       pivotLeft(kAutoTurnSpeed);
-      delay(520);
+      if (!safeMotorDelay(520, true, false)) { haltMotors(); return; }
       haltMotors();
     }
   }
@@ -856,7 +970,7 @@ void runObstacleMode() {
   else {
     displayBitmap(kArrowForward);
     driveForward(kAutoDriveSpeed);
-    delay(25);
+    safeMotorDelay(25, true, true);
   }
 }
 
@@ -936,7 +1050,20 @@ void runBluetoothMode(char cmd) {
   lastCmd = cmd;
 
   switch (cmd) {
-    case 'F': case 'f': displayBitmap(kArrowForward);  driveForward(gDriveSpeed); break;
+    case 'F': case 'f': {
+      uint8_t leftCliff  = digitalRead(kPinLineSensorLeft);
+      uint8_t rightCliff = digitalRead(kPinLineSensorRight);
+      float dist = getDistanceCm();
+      if (leftCliff == 0 || rightCliff == 0 || gCliffFault || (dist > 0.0f && dist < 15.0f)) {
+        haltMotors();
+        gMotorActive = false;
+        displayBitmap(kIconBrake);
+      } else {
+        displayBitmap(kArrowForward);
+        driveForward(gDriveSpeed);
+      }
+      break;
+    }
     case 'B': case 'b': displayBitmap(kArrowBackward); driveBackward(gDriveSpeed); break;
     case 'L': case 'l': displayBitmap(kArrowLeft);     pivotLeft(gTurnSpeed); break;
     case 'R': case 'r': displayBitmap(kArrowRight);    pivotRight(gTurnSpeed); break;
@@ -1191,21 +1318,70 @@ void runCliffDetectionMode() {
   uint8_t leftCliff  = digitalRead(kPinLineSensorLeft);
   uint8_t rightCliff = digitalRead(kPinLineSensorRight);
 
-  if (leftCliff == 0 || rightCliff == 0) {
+  // 1. Cliff detected or existing fault: Stuck-State Defense
+  if (leftCliff == 0 || rightCliff == 0 || gCliffFault) {
     haltMotors();
-    talkAstromech(EMOTION_RELIEVED); // Relieved "Phew, that was close!" sigh
+    gCliffRecoveryAttempts++;
+
+    // Plausibility / Stuck-Low Protection:
+    // If cliff reading persists across >3 consecutive recovery maneuvers,
+    // declare a stuck-low sensor fault and latch into an emergency halt.
+    if (gCliffRecoveryAttempts > 3 || gCliffFault) {
+      gCliffFault = true;
+      haltMotors();
+      displayBitmap(kIconSkullAlert);
+      if (!gMasterMute) chirpSweep(350, 150, 30, 3);
+      safeMotorDelay(60, false, false);
+      return;
+    }
+
+    talkAstromech(EMOTION_RELIEVED);
     displayBitmap(kIconSkullAlert);
     driveBackward(160);
-    delay(280);
+    if (!safeMotorDelay(280, false, false)) { haltMotors(); return; }
     haltMotors();
     pivotRight(180);
-    delay(350);
+    if (!safeMotorDelay(350, false, false)) { haltMotors(); return; }
     haltMotors();
-  } else {
-    displayBitmap(kIconCliffGuard);
-    driveForward(140);
-    delay(20);
+
+    // Verify recovery to safe floor
+    leftCliff  = digitalRead(kPinLineSensorLeft);
+    rightCliff = digitalRead(kPinLineSensorRight);
+    if (leftCliff == 1 && rightCliff == 1) {
+      gCliffRecoveryAttempts = 0; // Successfully backed onto safe floor
+      gCliffForwardDriveStart = 0; // Reset drive timer
+    }
+    return;
   }
+
+  // 2. Clear Floor: Reset recovery counter
+  gCliffRecoveryAttempts = 0;
+
+  // 3. Sensor Plausibility Check (Stuck-High / Disconnected Wire Protection):
+  // When continuously driving forward in Cliff Mode, if both sensors remain completely
+  // unchanged for > 10 seconds without any edge or variation, latch fault and halt.
+  if (gCliffForwardDriveStart == 0) {
+    gCliffForwardDriveStart = millis();
+    gCliffLastStateChangeTime = millis();
+    gLastLeftCliffState = leftCliff;
+    gLastRightCliffState = rightCliff;
+  } else {
+    if (leftCliff != gLastLeftCliffState || rightCliff != gLastRightCliffState) {
+      gCliffLastStateChangeTime = millis();
+      gLastLeftCliffState = leftCliff;
+      gLastRightCliffState = rightCliff;
+    } else if (millis() - gCliffLastStateChangeTime > 10000) {
+      // Invariant: Unchanged continuous drive timeout -> fault -> latched halt!
+      gCliffFault = true;
+      haltMotors();
+      displayBitmap(kIconSkullAlert);
+      return;
+    }
+  }
+
+  displayBitmap(kIconCliffGuard);
+  driveForward(140);
+  safeMotorDelay(20, true, true);
 }
 
 /* ============================================================================
