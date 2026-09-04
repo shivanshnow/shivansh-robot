@@ -224,7 +224,7 @@ This project was born from a **collaborative multi-agent round table**, where Sh
    │     'B'     │ Drive Backward with a cute warning chirping sound!           │
    │  'L' / 'R'  │ Bank Left / Bank Right                                       │
    │     'S'     │ 🛑 EMERGENCY BRAKE! (Stops all motors instantly on a dime)   │
-   │ 'q'/'w'/'e' │ Shift Gears: 🐢 Precision (1), 🚗 Cruise (2), 🚀 Turbo (3)   │
+   │ 'q'/'w'/'e' │ Shift Gears: ♟️ Precision (1 / 45%), ⏱️ Cruise (2 / 70%), ⚡ Turbo (3 / 100%) │
    │     'G'     │ 👑 Royal Salute! Plays coronation fanfare & dances crown     │
    │     'K'     │ 💃 360° Victory Dance! Droid spins a complete victory circle │
    │     'U'     │ 🎯 Spin-the-Droid Roulette! Spins and picks a lucky direction│
@@ -260,7 +260,7 @@ Every playful beep and turn in S2-R2-D2 is backed by real, published scientific 
 
 4. **Organic Vocal Formant Synthesis & Audio Modeling**:
    * *Burtt, B. (1977). Sound Design of Star Wars: Vocal Formant Synthesis and Organic Sound Effects.*
-   * *Applied in*: Frequency glide synthesis (`chirpSweep()`, `chirpWarble()`, `talkAstromech()`) modulating piezo square waves on hardware Timer0, paired with Web Audio API biquad filter nodes in the browser cockpit.
+   * *Applied in*: Frequency glide synthesis (`chirpSweep()`, `chirpWarble()`, `talkAstromech()`) modulating single piezo square waves via hardware Timer2 (`tone()`), preserving Timer0 for precision `millis()` watchdog timing and Timer1 for dual-channel motor PWM, paired with Web Audio API biquad filter nodes in the browser cockpit.
 
 5. **Tactical Threat Evaluation & Operational Space Control**:
    * *Shannon, C. E. (1950). Programming a Computer for Playing Chess.* Philosophical Magazine, 41(314), 256-275.

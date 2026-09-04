@@ -19,71 +19,91 @@
 
 ---
 
-# 🌟 THE 3-STEP EMOTIONAL JOURNEY (ALL CLASSIC MODES INCLUDED)
+# 🌟 THE 4-TAB ASTROMECH COCKPIT ARCHITECTURE
 
 ```
-  ┌───────────────────────┬────────────────────────┬───────────────────────┐
-  │ 🚀 TAB 1: START       │ ✨ TAB 2: EXPERIENCE   │ 🎉 TAB 3: HAVE FUN!   │
-  │ (Drive, Horn & Draw)  │ (AI Vision & Magic)    │ (Games, Dance & Traps)│
-  ├───────────────────────┼────────────────────────┼───────────────────────┤
-  │ 🌊 360° Drift Pad     │ 👁️ Smart Camera (Find) │ 💃 360° Victory Dance │
-  │ ⚙️ Turtle/Cruise/Turbo│ 🎙️ Whisper & Shout     │ 🏁 Tape Line Follower │
-  │ 📯 Honk Horn & Brake  │ 🤖 Follow Me           │ 🎯 Party Spinner      │
-  │ 📱 Tilt Steer (Mario) │ 🎵 Air Music (Theremin)│ 🕵️ Spy Broadcaster    │
-  │ 🎨 Draw on Droid Face │ 🎭 Animated Face Show  │ 🚪 Door Guard Counter │
-  │                       │                        │ 🌙 Night Intruder     │
-  │                       │                        │ ☕ Desk Wanderer      │
-  │                       │                        │ 🧭 Full Room Scout    │
-  │                       │                        │ 🎶 Music Jukebox      │
-  └───────────────────────┴────────────────────────┴───────────────────────┘
+  ┌───────────────────────┬────────────────────────┬───────────────────────┬───────────────────────┐
+  │ 🚀 TAB 1: PILOT       │ 🛡️ TAB 2: PROTECT      │ 👁️ TAB 3: DISCOVER    │ 🎉 TAB 4: CELEBRATE   │
+  │ (Drive & Face)        │ (Sentry & Patrol)      │ (Vision AI & 4K)      │ (Games & Jukebox)     │
+  ├───────────────────────┼────────────────────────┼───────────────────────┼───────────────────────┤
+  │ 🌊 360° Drift Pad     │ ♟️ The King's Second   │ 👁️ Smart Camera (Find) │ 💃 360° Dance ('K')   │
+  │ ⚙️ 3-Speed Gearbox    │ 🚪 Sicilian Fortress   │ ♟️ Grandmaster Chess   │ 🎯 Party Spin ('U')   │
+  │ 📯 Honk Horn & Brake  │ 🌙 Night Sentry        │ 👑 Royal Briefing     │ 📻 Morse Academy      │
+  │ 📱 Tilt Steer (Motion)│ ☕ Desk Companion      │ 🎙️ Vocal Gemini Brain │ 🔘 Telegraph Key      │
+  │ 🎨 Draw on Droid Face │ 🧭 Endgame Room Scout  │ 📺 GoPro 4K Live POV  │ 🕵️ Spy Broadcaster    │
+  │ 🎭 Animated Face Show │ 🏁 Floor Track Courier │ 🎯 Target Reticle HUD │ 🎶 Music Jukebox      │
+  │ ⚡ Live Throttle (PWM)│ ⌛ Focus Sentry (25m)  │                       │ 🎭 Emotion Soundboard │
+  └───────────────────────┴────────────────────────┴───────────────────────┴───────────────────────┘
 ```
 
 ---
 
-### 🚀 Step 1: `START` (Drive, Steer, Honk & Draw)
-* **🌊 360° Drift Pad:** Smooth fluid touch steering in any direction.
-* **3-Speed Transmission:** `🐢 Turtle (45%)` • `🚗 Cruise (70%)` • `🚀 Turbo (100%)`.
-* **📯 Honk Horn & Emergency Brake:** Acoustic horn beep button + Big Red Stop switch.
-* **📱 Tilt Steering:** Lean phone to steer like a steering wheel.
-* **🎨 Draw on Droid Face:** Tap pixels to draw glowing art live on `S2-R2-D2`'s face!
+### 🚀 Tab 1: `PILOT` (Drive, Steer, Throttle & Face Drawing)
+* **🌊 360° Drift Pad:** Smooth fluid touch steering with instant auto-braking on thumb release.
+* **3-Speed Transmission:**
+  * `♟️ Classical Precision (Gear 1 / 'q'):` 45% (120 PWM) — Safe indoor tabletop crawl.
+  * `⏱️ Rapid Cruise (Gear 2 / 'w'):` 70% (180 PWM) — Balanced patrol speed.
+  * `⚡ Blitz Turbo (Gear 3 / 'e'):` 100% (255 PWM) — Maximum velocity floor sprint.
+* **📯 Honk Horn & Emergency Brake:** Acoustic horn beep button + high-priority 48px Emergency Brake switch.
+* **📱 Tilt Steering:** Calibrated accelerometer drive with neutral baseline latch and ±15° deadband.
+* **🎨 Draw on Droid Face:** Tap pixels to draw glowing art live on `S2-R2-D2`'s 8x8 matrix face.
+* **🎭 Animated Face Show:** Cycles smiling eyes, winks 😉, and pulsing hearts ❤️.
 
 ---
 
-### ✨ Step 2: `EXPERIENCE` (Frontier AI & Magical Personas)
-* **👁️ Smart Camera (Find & Go):** Type any object name (e.g. *"Find my mug"*), and `S2-R2-D2` finds it and drives right to it!
-* **🎙️ Whisper & Shout Drive:** Whisper for stealth crawling; Shout for a turbo boost!
-* **🤖 Follow Me:** Walk around — `S2-R2-D2` follows your hand and chirps happily when petted!
-* **🎵 Air Music:** Play music in thin air without touching anything! (Left hand changes pitch, right hand beat).
-* **🎭 Animated Face Light Show (Classic):** Cycles glowing animated expressions: Winks 😉, Hearts ❤️ & Smiles 😊!
+### 🛡️ Tab 2: `PROTECT` (Autonomous Sentry & Patrol Engines)
+* **♟️ The King's Second (Mode 5):** Dynamic escort patrol — tracks pilot stride (18-80cm) and sweeps flanks.
+* **🚪 The Sicilian Fortress (Mode 9):** Stationary entrance defense — greets arriving visitors and counts guests.
+* **🌙 King's Indian Perimeter (Mode 6):** Photocell darkness trap — alarms with siren & flashbang if someone approaches.
+* **☕ Desk Companion Patrol (Mode 7):** Tabletop patrol — dual underside IR sensors prevent falling off desk edges.
+* **🧭 Endgame Room Scout (Mode 1):** Autonomous room explorer with ultrasonic radar echolocation and curious chirps.
+* **🏁 Queen's Gambit Courier (Mode 2):** High-speed floor track follower following black tape courses.
+* **⌛ Grandmaster Pomodoro Sentry:** Independent 25-minute deep work timer — displays quiet `@ FOCUS` face without motor movement.
 
 ---
 
-### 🎉 Step 3: `HAVE FUN!` (Games, Dance, Line Racing & Traps)
-* **💃 360° Victory Celebration Dance (Classic):** Spins a 360° celebration pirouette with victory chimes!
-* **🏁 Tape Line Follower (Classic):** Put black tape on the floor — `S2-R2-D2` races along the track automatically!
-* **🎯 Party Spinner:** Spins fast and randomly points to someone in the circle!
-* **🕵️ Secret Spy Broadcaster:** Type ANY secret word or choose 1-tap presets (`SOS`, `R2D2`, `HELLO`, `COMMAND`) ➔ `S2-R2-D2` blinks and beeps the secret code!
-* **🚪 Door Guard & Visitor Counter:** Park outside your door — greets people and counts everyone who walks into your room!
-* **🌙 Night Intruder Alarm:** Arms when bedroom lights turn off. Alarms & flashes if someone sneaks near!
-* **☕ Desk Wanderer:** Let `S2-R2-D2` roam your desk while you work — automatically stops before edges!
-* **🧭 Full Room Scout:** Explores the whole room safely, avoiding furniture!
-* **🎶 Music Jukebox:** Star Wars, R2-D2 Chirp, Mario, Secret Spy Theme!
+### 👁️ Tab 3: `DISCOVER` (Frontier Multimodal AI & 4K Vision)
+* **👁️ Smart Camera (Find & Drive):** Gemini Vision AI locates physical objects in room and guides robot to them.
+* **♟️ Grandmaster Chess Arbiter:** Evaluates physical chessboard positions, identifies coordinates, and calculates candidate moves.
+* **👑 Royal Executive Briefing:** Fetches live weather, local time, synthesizes debrief, and animates facial matrix.
+* **🎙️ Vocal Gemini Cortex:** Ask any question aloud; robot speaks answers and scrolls summary text across face.
+* **📺 GoPro 4K Live POV:** Low-latency video pipeline displaying full HUD with targeting reticle.
 
 ---
 
-# 🏛️ HARDWARE PINOUT SHEET
+### 🎉 Tab 4: `CELEBRATE` (Games, Dances, Morse Code & Jukebox)
+* **💃 360° Victory Celebration Dance ('K'):** Spins a 360° victory pirouette with triumphant fanfare.
+* **🎯 Party Spinner Roulette ('U'):** High-speed random roulette spin pointing to a player in the circle.
+* **📻 Morse Code Academy:** Interactive ear-training listening quiz with scoring and letter flashcards.
+* **🔘 Tactile Telegraph Key:** Real-time telegraph paddle for tapping custom Morse code directly to robot buzzer.
+* **🕵️ Secret Spy Broadcaster:** One-tap presets (`SOS`, `R2D2`, `KING`, `HELLO`) transmit audio-visual Morse code.
+* **🎶 Onboard Music Jukebox:** Direct wireless melody playback on robot speaker (Star Wars, R2 Chirp, Mario, Spy Theme).
+* **🎭 Astromech Emotion Soundboard:** Instant emotive expressions (Ecstasy 'Y', Say Yes 'A', Grumpy 'D', Fatigued 'C').
+
+---
+
+# 🏛️ HARDWARE PINOUT & TIMER ARCHITECTURE
 
 ```
   ┌────────────────────────────────────────────────────────────────────────┐
-  │ D2 / D3: Ultrasonic Sonar Eyes (HC-SR04 @ 40kHz)                       │
-  │ D4 / D5: Underside Infrared Edge & Cliff Sensors (Active Brakes)       │
-  │ D6 / D7: Dual Piezo Acoustic Buzzers                                   │
-  │ D8 / D9 / D10 / A1: Dual DC Motor Driver                               │
-  │ A2 / A3 / D12: Motion Dome & Photocell Sensor                          │
-  │ A4 / A5: 8x8 LED Matrix Display                                        │
-  │ BLE Radio: HM-10 Bluetooth Low Energy                                  │
+  │ D2 / D3: Ultrasonic Sonar Transceiver (HC-SR04 Trigger / Echo)         │
+  │ D4 / D5: Underside Infrared Edge & Cliff Sensors (Active LOW safety)   │
+  │ D6: Single Piezo Acoustic Buzzer (Synthesizer driven via Timer2)      │
+  │ D8: Motor A (Left) Direction Phase                                     │
+  │ D9: Motor A (Left) PWM Speed Control (Timer1 Dual-Channel Output A)    │
+  │ D10: Motor B (Right) PWM Speed Control (Timer1 Dual-Channel Output B)  │
+  │ A1: Motor B (Right) Direction Phase                                    │
+  │ A4 / A5: I2C Bus (SDA / SCL @ 0x70) HT16K33 8x8 LED Matrix Face        │
+  │ D0 / D1: Hardware UART HM-10 Bluetooth Low Energy (9600 Baud)          │
+  │ D13: Onboard Status LED (Heartbeat / Diagnostic Blink)                 │
+  │ A2, A3, D12, A6, A7: Diagnostic Expansion & Sensor Ports              │
+  ├────────────────────────────────────────────────────────────────────────┤
+  │ ATmega328P Timer Architecture:                                         │
+  │  • Timer0 (8-bit): System Tick, millis(), micros(), watchdog timings   │
+  │  • Timer1 (16-bit): Phase-correct PWM for dual DC motors (Pins 9 & 10) │
+  │  • Timer2 (8-bit): Frequency-agile audio synthesis (tone() on Pin 6)  │
   └────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
-*Maintained by Pilot & Antigravity AI Pair-Programmer • Platform: `S2-R2-D2`* 🚀✨🎉🤖
+*Maintained by Pilot Shivansh & Antigravity AI Pair-Programmer • Platform: `S2-R2-D2`* 🚀✨🎉🤖

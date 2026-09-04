@@ -1,0 +1,60 @@
+name: MECHA OS CI & Firmware Verification
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  firmware-build:
+    name: Compile Arduino AVR Sketches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install Arduino AVR Core
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr
+
+      - name: Compile MultiModeSuperRobot Sketch
+        run: |
+          arduino-cli compile --fqbn arduino:avr:uno firmware/MultiModeSuperRobot/MultiModeSuperRobot.ino
+
+      - name: Compile ObstacleAvoidance Sketch
+        run: |
+          arduino-cli compile --fqbn arduino:avr:uno firmware/ObstacleAvoidance/ObstacleAvoidance.ino
+
+      - name: Compile AnimatedExpressions Sketch
+        run: |
+          arduino-cli compile --fqbn arduino:avr:uno firmware/AnimatedExpressions/AnimatedExpressions.ino
+
+      - name: Compile HardwareDiagnostic Sketch
+        run: |
+          arduino-cli compile --fqbn arduino:avr:uno firmware/HardwareDiagnostic/HardwareDiagnostic.ino
+
+  cockpit-headless-test:
+    name: Headless Web Cockpit Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Playwright & Browsers
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Run Headless Browser Cockpit Verification
+        run: |
+          python3 tools/test_cockpit.py
