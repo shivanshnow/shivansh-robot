@@ -38,6 +38,10 @@ jobs:
         run: |
           arduino-cli compile --fqbn arduino:avr:uno firmware/HardwareDiagnostic/HardwareDiagnostic.ino
 
+      - name: Compile BluetoothControl Sketch
+        run: |
+          arduino-cli compile --fqbn arduino:avr:uno firmware/BluetoothControl/BluetoothControl.ino
+
   cockpit-headless-test:
     name: Headless Web Cockpit Validation
     runs-on: ubuntu-latest
