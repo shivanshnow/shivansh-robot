@@ -620,10 +620,7 @@
           <div class="status-sub" id="statusSubLabel">Astromech Droid Companion</div>
         </div>
       </div>
-      <div style="display:flex; gap:6px; align-items:center;">
-        <button class="btn-connect" id="btnConnect" onclick="connectBluetooth()" aria-label="Link Droid via Bluetooth">Link Droid</button>
-        <button class="btn-toggle-mini" id="btnConnectUsb" style="background:rgba(0, 242, 254, 0.15); border-color:var(--neon-cyan); color:var(--neon-cyan); font-weight:800; padding:8px 10px; height:100%; border-radius:10px;" onclick="connectUsbSerial()" title="Direct USB Cable Tether" aria-label="Connect via Direct USB Cable">🔌 USB</button>
-      </div>
+      <button class="btn-connect" id="btnConnect" onclick="connectBluetooth()" aria-label="Link Droid via Bluetooth">Link Droid</button>
     </div>
   </header>
 
@@ -1443,7 +1440,7 @@
       stopDriveHeartbeat();
       if (cmd !== 'S') {
         driveHeartbeatTimer = setInterval(() => {
-          if (rxTxChar || isUsbConnected) {
+          if (rxTxChar) {
             sendCommand(cmd);
           }
         }, 150);
@@ -1669,7 +1666,7 @@
 
         triggerHaptic('double');
 
-        if (!rxTxChar && !isUsbConnected) {
+        if (!rxTxChar) {
           document.getElementById("hudLog").innerText = `[SPOTTED] ${plan.target} @ ${distNum}cm! (Droid offline)`;
           return;
         }
@@ -2049,7 +2046,7 @@
 
     async function checkHourlyChime() {
       if (!isHourlyChimeEnabled) return;
-      if (!rxTxChar && !isUsbConnected) return; // Only if linked
+      if (!rxTxChar) return; // Only if linked
       if (currentActiveMission || isTouchingPad) return;
 
       const now = new Date();
@@ -2500,79 +2497,8 @@
       document.getElementById("hudLog").innerText = "[OFFLINE] S2-R2-D2 Disconnected";
     }
 
-    let serialPort = null;
-    let serialWriter = null;
-    let isUsbConnected = false;
-
-    async function connectUsbSerial() {
-      if (!("serial" in navigator)) {
-        alert("Web Serial is supported in Google Chrome, Microsoft Edge, and Opera on Mac, PC, and Chromebook.");
-        return;
-      }
-
-      // If already connected, toggle disconnect
-      if (isUsbConnected && serialPort) {
-        try {
-          if (serialWriter) {
-            await serialWriter.close();
-            serialWriter = null;
-          }
-          await serialPort.close();
-          serialPort = null;
-          isUsbConnected = false;
-
-          disarmAll();
-          bleWriteQueue = [];
-          isBleWriting = false;
-
-          document.getElementById("btDot").classList.remove("online");
-          document.getElementById("btStatus").innerText = "Droid Offline";
-          if (document.getElementById("statusSubLabel")) document.getElementById("statusSubLabel").innerText = "Astromech Droid Companion";
-          const usbBtn = document.getElementById("btnConnectUsb");
-          if (usbBtn) {
-            usbBtn.innerText = "🔌 USB";
-            usbBtn.style.background = "rgba(0, 242, 254, 0.15)";
-          }
-          document.getElementById("hudLog").innerText = "[USB] Disconnected from S2-R2-D2.";
-          return;
-        } catch (e) {
-          console.error("Disconnect Error:", e);
-        }
-      }
-
-      try {
-        const hud = document.getElementById("hudLog");
-        hud.innerText = "[USB] Linking USB Port...";
-        serialPort = await navigator.serial.requestPort();
-        await serialPort.open({ baudRate: 9600 });
-        
-        serialWriter = serialPort.writable.getWriter();
-        isUsbConnected = true;
-
-        const currentPilot = localStorage.getItem('s2r2d2_pilot_name') || 'King Shivansh';
-        document.getElementById("btDot").classList.add("online");
-        document.getElementById("btStatus").innerText = `👑 ${currentPilot} • Direct USB Link`;
-        if (document.getElementById("statusSubLabel")) document.getElementById("statusSubLabel").innerText = "Wired Telemetry Active";
-        const usbBtn = document.getElementById("btnConnectUsb");
-        if (usbBtn) {
-          usbBtn.innerText = "Linked (USB)";
-          usbBtn.style.background = "var(--neon-green)";
-        }
-        hud.innerText = `[USB LINK] Connected! Initializing S2-R2-D2...`;
-
-        // Wait 1.8s for Arduino bootloader reset to complete
-        setTimeout(async () => {
-          hud.innerText = `[USB LINK] S2-R2-D2 Ready! Welcome ${currentPilot}!`;
-          await sendCommand("G");
-        }, 1800);
-      } catch (err) {
-        console.error("USB Serial Error:", err);
-        document.getElementById("hudLog").innerText = "[USB ERROR] " + err.message;
-      }
-    }
-
     // ========================================================================
-    // 📡 SERIALIZED COMMAND TRANSMISSION PIPELINE (BLE / USB DUAL-LINK)
+    // 📡 SERIALIZED COMMAND TRANSMISSION PIPELINE (BLE LINK)
     // ========================================================================
     let bleWriteQueue = [];
     let isBleWriting = false;
@@ -2602,11 +2528,7 @@
 
         for (let attempt = 0; attempt <= retries; attempt++) {
           try {
-            if (isUsbConnected && serialWriter) {
-              await serialWriter.write(data);
-              success = true;
-              break;
-            } else if (rxTxChar) {
+            if (rxTxChar) {
               if (data.length <= 20) {
                 if (rxTxChar.writeValueWithoutResponse) {
                   try {
@@ -2788,7 +2710,7 @@
     function startMissionKeepalive() {
       stopMissionKeepalive();
       missionKeepaliveTimer = setInterval(() => {
-        if (currentActiveMission && (rxTxChar || isUsbConnected)) {
+        if (currentActiveMission && rxTxChar) {
           sendCommand('!');
         } else {
           stopMissionKeepalive();
@@ -2874,7 +2796,7 @@
     // JUKEBOX MELODY ENGINE (DIRECT WIRELESS TRANSMISSION TO S2-R2-D2 ONLY)
     // ------------------------------------------------------------------------
     async function playSong(songCode, songName) {
-      if (rxTxChar || isUsbConnected) {
+      if (rxTxChar) {
         await sendCommand(songCode);
       }
       document.getElementById("hudLog").innerText = `[MUSIC] S2-R2-D2 Playing ${songName} on onboard speaker...` + (isMasterMuted ? " (🔇 Muted • Tap SOUND to hear)" : "");
@@ -2888,7 +2810,7 @@
     function startGyroHeartbeat() {
       stopGyroHeartbeat();
       gyroHeartbeatTimer = setInterval(() => {
-        if (gyroActive && (rxTxChar || isUsbConnected) && lastGyroCmd !== 'S') {
+        if (gyroActive && rxTxChar && lastGyroCmd !== 'S') {
           sendCommand(lastGyroCmd);
         } else {
           stopGyroHeartbeat();
@@ -2927,7 +2849,7 @@
     }
 
     function handleOrientation(e) {
-      if (!gyroActive || (!rxTxChar && !isUsbConnected)) return;
+      if (!gyroActive || !rxTxChar) return;
       if (e.beta === null || e.gamma === null) return;
 
       if (baselineBeta === null || baselineGamma === null) {
