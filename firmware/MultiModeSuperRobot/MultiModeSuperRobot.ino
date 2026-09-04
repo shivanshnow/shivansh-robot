@@ -204,6 +204,12 @@ const uint8_t PROGMEM kIconHeart[8] = {
   0b01111110, 0b00111100, 0b00011000, 0b00000000
 };
 
+// B2: the resting half of the heartbeat — same heart, one ring smaller.
+const uint8_t PROGMEM kIconHeartSmall[8] = {
+  0b00000000, 0b00000000, 0b00100100, 0b01111110,
+  0b00111100, 0b00011000, 0b00000000, 0b00000000
+};
+
 const uint8_t PROGMEM kIconFollowPuppy[8] = {
   0b01000010, 0b11000011, 0b11111111, 0b10111101,
   0b11111111, 0b01100110, 0b00111100, 0b00011000
@@ -331,6 +337,8 @@ void arcDrive(uint8_t leftPwm, uint8_t rightPwm);
 uint16_t getDistanceCm();
 uint16_t getFilteredDistance();
 int readActivePhotocell();
+const uint8_t* tickFollowHeartbeat(uint16_t dist); // B2: Follow Me living heartbeat
+void resetFollowHeartbeat();
 int sampleLdrWithHealth();
 bool checkPirMotionDetected();
 
@@ -501,6 +509,7 @@ void setMode(RobotMode newMode) {
   gCliffRecoveryAttempts = 0;
   gCliffForwardDriveStart = 0;
   gCliffFault = false;
+  resetFollowHeartbeat(); // B2: a mode change stops the pulse and clears D13
 
   if (newMode == MODE_LIVING_PET) {
     gFollowLockAcquired = false;
@@ -1198,6 +1207,7 @@ void runLivingPetEngine() {
 
   // 3. Initial Handshake Lock Ritual (Wait for Pilot to stand in front before rolling!)
   if (!gFollowLockAcquired) {
+    resetFollowHeartbeat(); // B2: no lock, no pulse — and D13 left LOW for §8
     haltMotors();
     displayBitmap(kIconStandby);
 
@@ -1245,6 +1255,11 @@ void runLivingPetEngine() {
     return;
   }
 
+  // B2: Lock is held — the droid has a pulse. D13 beats for the whole of Follow
+  // Me; the matrix heart below is used only by the two resting branches (§5
+  // close-range and §6 sweet spot), so arrows, brake and standby are untouched.
+  const uint8_t* heartFrame = tickFollowHeartbeat(sonarHealthy ? dist : 0);
+
   // 4. DEGRADATION MATRIX: SONAR DOWN -> LDR bearing + PIR gate, NO range: cap speed, shorten legs, stop often
   if (!sonarHealthy && ldrHealthy) {
     if (!humanConfirmed) {
@@ -1286,7 +1301,7 @@ void runLivingPetEngine() {
   if (sonarHealthy && rawDist > 0 && rawDist < kSafeStopDist) {
     haltMotors();
     if (rawDist < 12) {
-      displayBitmap(kIconHeart);
+      displayBitmap(heartFrame); // B2: beating heart, fastest at his feet
       if (millis() - lastChirpTrillTime > 2500) {
         talkAstromech(EMOTION_HAPPY);
         lastChirpTrillTime = millis();
@@ -1304,7 +1319,7 @@ void runLivingPetEngine() {
   // 6. Follow Me Sweet Spot (25cm - 32cm -> Standby & Subtle Flank Scan)
   if (sonarHealthy && dist >= kSafeStopDist && dist <= kSweetSpotMax) {
     haltMotors();
-    displayBitmap(kIconFollowPuppy);
+    displayBitmap(heartFrame); // B2: resting in the sweet spot, breathing
     stopAllAudio();
     lastLostTime = millis();
     lastValidDist = dist;
@@ -2615,6 +2630,39 @@ uint16_t getFilteredDistance() {
 // If a future LDR module is wired inverted, flip here and in sampleLdrWithHealth().
 int readActivePhotocell() {
   return analogRead(kPinLdrFollow);
+}
+
+// ---------------------------------------------------------------------------
+// B2: Follow Me living heartbeat.
+// While Follow Me holds lock, D13 pulses like a pulse: a short bright systole
+// then a rest, and the rest gets shorter the closer the pilot stands. Returns
+// the heart bitmap for this instant (big on the beat, small between beats) so
+// the two RESTING branches can show it; the moving branches ignore it and keep
+// their arrows. No delay(), no float, no heap — pure millis() state machine,
+// so nothing in the motion or safety path is touched.
+// Period: systole 90ms; diastole 320ms at 18cm rising to ~1126ms at 80cm
+// (integer curve 320 + (d-18)*13, matching a map() without the long math).
+// ---------------------------------------------------------------------------
+static bool gHeartSystole = false;
+static unsigned long gHeartLastBeat = 0;
+
+const uint8_t* tickFollowHeartbeat(uint16_t dist) {
+  uint16_t d = (dist == 0) ? 80 : constrain(dist, 18, 80);
+  uint16_t phaseMs = gHeartSystole ? 90 : (uint16_t)(320 + (d - 18) * 13);
+  if (millis() - gHeartLastBeat >= phaseMs) {
+    gHeartLastBeat = millis();
+    gHeartSystole = !gHeartSystole;
+    // Safe: inside Follow Me, D13 is otherwise driven only by the lost-timeout
+    // branch, which runs only after gFollowLockAcquired has been cleared.
+    digitalWrite(kPinStatusLed, gHeartSystole ? HIGH : LOW);
+  }
+  return gHeartSystole ? kIconHeart : kIconHeartSmall;
+}
+
+void resetFollowHeartbeat() {
+  gHeartSystole = false;
+  gHeartLastBeat = millis();
+  digitalWrite(kPinStatusLed, LOW);
 }
 
 int sampleLdrWithHealth() {
