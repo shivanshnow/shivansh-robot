@@ -949,6 +949,7 @@
         <button class="btn-toggle-mini" style="border-color:var(--neon-cyan); color:var(--neon-cyan); padding:8px 0;" onclick="executeRealGeminiVisionGoal()" aria-label="Find and Drive to Target">🎯 FIND & DRIVE</button>
         <button class="btn-toggle-mini" style="border-color:var(--neon-green); color:var(--neon-green); padding:8px 0;" onclick="analyzePhysicalChessboard()" aria-label="Scan Physical Chessboard">♟️ SCAN CHESSBOARD</button>
       </div>
+      <button class="btn-toggle-mini" style="width:100%; margin-top:6px; border-color:var(--neon-purple); color:var(--neon-purple); padding:8px 0;" onclick="askWhatDoYouSee()" aria-label="Ask the droid what it can see">👀 WHAT DO YOU SEE?</button>
       <input type="text" class="cortex-input" id="aiGoalInput" placeholder="Type target to find (e.g. 'Find my mug', 'Find blue keys')">
       <!-- 🛡️ SUPERVISED AI PLAN EXECUTION BUTTON (Deadman Hold-to-Execute) -->
       <button class="btn-toggle-mini" id="btnExecuteAiPlan" style="display:none; width:100%; margin-top:6px; background:rgba(0, 245, 212, 0.15); border-color:var(--neon-green); color:var(--neon-green); font-weight:800; padding:10px 0; font-size:0.75rem; user-select:none; -webkit-user-select:none;" aria-label="Press and Hold to Execute AI Plan">
@@ -1818,6 +1819,52 @@
         console.error("Chess Vision Error:", e);
         document.getElementById("hudLog").innerText = `[ERROR] ${e.message}`;
         document.getElementById("aiStatTarget").innerText = "⚠️ Error";
+        document.getElementById("aiStatReason").innerText = e.message;
+      }
+    }
+
+    // 👀 "What do you see?" — the droid looks and TALKS. It never drives.
+    // describeScene() returns plain text with no actions array, so there is no
+    // path from anything Gemini says to a motor: the reply is only spoken and
+    // scrolled across the LED face (sendCommand 'W' already sanitises to ASCII
+    // and clamps to 16 characters).
+    async function askWhatDoYouSee() {
+      const hud = document.getElementById("hudLog");
+      const video = document.getElementById("cameraStream");
+
+      if (!video || !video.videoWidth) {
+        hud.innerText = "[LOOK] Tap '🔄 CAM' or '📺 GOPRO' to open the camera first!";
+        return;
+      }
+      if (typeof CortexAPI === 'undefined' || !CortexAPI.hasApiKey()) {
+        hud.innerText = "[!] Please set your Gemini API key to let S2-R2-D2 look around.";
+        promptSetApiKey();
+        return;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = 640;
+      canvas.height = 480;
+      canvas.getContext("2d").drawImage(video, 0, 0, 640, 480);
+      const base64Data = canvas.toDataURL("image/jpeg", 0.85).split(',')[1];
+
+      hud.innerText = "[LOOK] 👀 S2-R2-D2 is having a good look...";
+      document.getElementById("aiStatReason").innerText = "Looking around...";
+
+      try {
+        const sentence = await CortexAPI.describeScene(base64Data);
+        if (!sentence) {
+          hud.innerText = "[LOOK] 🤔 S2-R2-D2 is not sure what it is looking at!";
+          return;
+        }
+        document.getElementById("aiStatReason").innerText = sentence;
+        hud.innerText = `[LOOK] 👀 ${sentence}`;
+        triggerHaptic('double');
+        speakVocalMessage(sentence);
+        if (rxTxChar) sendCommand(`W${sentence}\n`); // scrolls the first 16 chars
+      } catch (e) {
+        console.error("Describe Scene Error:", e);
+        hud.innerText = `[ERROR] ${e.message}`;
         document.getElementById("aiStatReason").innerText = e.message;
       }
     }

@@ -227,6 +227,51 @@ Return ONLY a valid JSON object matching this schema with NO markdown code block
     return JSON.parse(raw);
   }
 
+  /**
+   * 👀 "What do you see?" — one playful, kid-safe sentence about the scene.
+   *
+   * TEXT ONLY, BY DESIGN. Unlike analyzeVisionTarget(), this returns a plain
+   * string and never an actions array, so nothing it says can ever become
+   * robot motion. It is a describer, not a driver.
+   */
+  async function describeScene(base64Image) {
+    const apiKey = getApiKey();
+    if (!apiKey || apiKey.length < 10) {
+      throw new Error("Gemini API key not configured. Tap the badge to set your key.");
+    }
+
+    const promptText = `You are S2-R2-D2, a friendly astromech droid talking to an 8-year-old child.
+Look at this photo and say what you see in ONE short, playful, cheerful sentence.
+Rules: at most 90 characters. Plain English words only, no emoji, no markdown, no quotes.
+Never mention people's names, faces, appearance, or anything unkind or scary.
+If you are unsure what something is, say so happily and guess.
+Reply with ONLY that one sentence and nothing else.`;
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: promptText },
+            { inline_data: { mime_type: "image/jpeg", data: base64Image } }
+          ]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || "HTTP " + response.status);
+    }
+
+    const data = await response.json();
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    // Flatten to a single clean sentence; never returns an object or actions.
+    return String(raw).replace(/[`*_#]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  }
+
   return {
     getApiKey: getApiKey,
     setApiKey: setApiKey,
@@ -235,7 +280,8 @@ Return ONLY a valid JSON object matching this schema with NO markdown code block
     fetchRoyalBriefing: fetchRoyalBriefing,
     askVocalBrain: askVocalBrain,
     analyzeVisionTarget: analyzeVisionTarget,
-    analyzeChessboard: analyzeChessboard
+    analyzeChessboard: analyzeChessboard,
+    describeScene: describeScene
   };
 })();
 
