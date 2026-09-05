@@ -1200,6 +1200,11 @@
     let pendingAiPlan = null;
     let isSupervisingAiPlan = false;
 
+    // 🛑 DISARM GENERATION — bumped by every disarmAll(). Anything that waits on an
+    // await and then arms a timer, a wake lock or a listener must capture this
+    // number first and give up if it changed: the pilot braked while it was waiting.
+    let disarmGeneration = 0;
+
     function stopDriveHeartbeat() {
       if (driveHeartbeatTimer) {
         clearInterval(driveHeartbeatTimer);
@@ -1224,6 +1229,9 @@
 
     // 🛑 CENTRAL MASTER DISARM & FAILSAFE (Universal disarm across all control modes)
     function disarmAll() {
+      // 0. Any half-finished async arming is now stale.
+      disarmGeneration++;
+
       // 1. Terminate all motion and keepalive timers immediately
       stopDriveHeartbeat();
       stopGyroHeartbeat();
@@ -1380,6 +1388,11 @@
 
     function switchTab(tabNum) {
       triggerHaptic('light');
+      // 🎬 A trick replay is only allowed while the pilot is watching it. Leaving
+      // the Pilot tab ends it (stopTrickReplay sends 'S').
+      if (tabNum !== 1 && isReplayingTrick) {
+        stopTrickReplay("[TRICK] 🛑 Replay stopped — you left the Pilot tab.");
+      }
       for (let i = 1; i <= 4; i++) {
         document.getElementById(`tabBtn${i}`).classList.toggle("active", i === tabNum);
         document.getElementById(`tabPane${i}`).classList.toggle("active", i === tabNum);
@@ -2628,13 +2641,42 @@
       if (f) f.classList.toggle('active', which !== 'D');
       if (d) d.classList.toggle('active', which === 'D');
     }
-    function setSurface(which) {
-      sendCommand(which === 'D' ? '%D\n' : '%F\n');
+    // The buttons must never claim Desk before the ROBOT has said GUARD:D. Asking is
+    // not the same as being answered \u2014 on a table that difference is the whole point.
+    let surfaceConfirmTimer = null;
+
+    function surfaceConfirmed(which) {
+      const wasAsking = !!surfaceConfirmTimer;
+      if (surfaceConfirmTimer) { clearTimeout(surfaceConfirmTimer); surfaceConfirmTimer = null; }
       reflectSurface(which);
+      if (!wasAsking) return; // an unsolicited status line: flip the buttons, stay quiet
       const hud = document.getElementById('hudLog');
       if (hud) hud.innerText = which === 'D'
         ? '[SURFACE] \uD83E\uDE91 Desk mode \u2014 the edge sensors are guarding the table.'
         : '[SURFACE] \uD83D\uDECB\uFE0F Floor mode \u2014 free to roam. Deadman, brake and sonar stay on.';
+    }
+
+    async function setSurface(which) {
+      const want = (which === 'D') ? 'D' : 'F';
+      const hud = document.getElementById('hudLog');
+      if (surfaceConfirmTimer) { clearTimeout(surfaceConfirmTimer); surfaceConfirmTimer = null; }
+      if (hud) hud.innerText = '[SURFACE] \u2026asking WALL-E';
+
+      const sent = await sendCommand(want === 'D' ? '%D\n' : '%F\n');
+      if (!sent) {
+        reflectSurface('F');
+        if (hud) hud.innerText = '[SURFACE] not armed \u2014 link?';
+        return;
+      }
+
+      // Ask for a status line; the GUARD field in the reply is what flips the buttons.
+      surfaceConfirmTimer = setTimeout(() => {
+        surfaceConfirmTimer = null;
+        reflectSurface('F');
+        const h = document.getElementById('hudLog');
+        if (h) h.innerText = '[SURFACE] not confirmed \u2014 still on Floor.';
+      }, 1500);
+      sendCommand('?');
     }
 
     // ========================================================================
@@ -2724,7 +2766,7 @@
           }
           if (isDroidStatusLine(line)) {
             const g = line.match(/\|GUARD:([DF])\|/);   // show which surface the robot thinks it is on
-            if (g) reflectSurface(g[1]);
+            if (g) surfaceConfirmed(g[1]);
             reflectMuteFromStatus(line);
           }
           if (droidDiaryGreeted) continue;
@@ -2892,15 +2934,16 @@
         const isStop = typeof cmd === 'string' && (cmd === 'S' || cmd.startsWith('S'));
 
         if (isStop) {
-          // 🛑 EMERGENCY BRAKE PRIORITY: Discard any pending motion commands instantly!
-          bleWriteQueue = bleWriteQueue.filter(item => {
-            if (item.isMotion) {
-              item.resolve(false);
-              return false;
-            }
-            return true;
-          });
-          bleWriteQueue.unshift({ data, isMotion: true, retries: 2, resolve });
+          // 🛑 THE BRAKE CANCELS EVERYTHING. Not just motion: a queued mode digit
+          // ('5' = Follow Me) or a motor-capable letter (G, U, Z, K…) sitting behind
+          // the stop would restart the robot a moment after it braked. So the whole
+          // queue is thrown away and 'S' is the only thing left to send.
+          const dropped = bleWriteQueue;
+          bleWriteQueue = [];
+          for (const item of dropped) {
+            try { item.resolve(false); } catch (e) {}
+          }
+          bleWriteQueue.push({ data, isMotion: true, retries: 2, resolve });
         } else if (isMotion) {
           // Coalesce motion commands
           bleWriteQueue = bleWriteQueue.filter(item => {
@@ -2982,6 +3025,16 @@
     const TRICK_MAX_STEPS = 120;
     const TRICK_STORAGE_KEY = 's2r2d2_taught_trick';
 
+    // Only these characters may ever end up in a trick — the four directions, the
+    // stop, and the three gear letters. A replay drives with nobody's thumb on a
+    // control, so anything else (a mode digit, a dance, a banner) is dropped both
+    // when recording and when loading whatever is sitting in localStorage.
+    const TRICK_ALLOWED = ['F', 'B', 'L', 'R', 'S', 'q', 'w', 'e'];
+    const TRICK_GEARS = ['q', 'w', 'e'];
+    function isTrickCmd(c) {
+      return typeof c === 'string' && c.length === 1 && TRICK_ALLOWED.indexOf(c) !== -1;
+    }
+
     let trickSteps = [];
     let isRecordingTrick = false;
     let isReplayingTrick = false;
@@ -3005,7 +3058,7 @@
 
     function recordTrickStep(cmd) {
       if (!isRecordingTrick || isReplayingTrick) return;
-      if (typeof cmd !== 'string' || cmd.length === 0) return;
+      if (!isTrickCmd(cmd)) return;
       const elapsed = Date.now() - trickRecordStart;
       if (elapsed > TRICK_MAX_MS || trickSteps.length >= TRICK_MAX_STEPS) {
         stopTrickRecording();
@@ -3063,10 +3116,13 @@
       if (!step) { stopTrickReplay("[TRICK] ✅ Trick finished!"); return; }
 
       sendCommand(step.cmd);
-      if (isMotionCommand(step.cmd) && step.cmd !== 'S' && step.cmd !== 's') {
-        startDriveHeartbeat(step.cmd);
-      } else {
+      if (TRICK_GEARS.indexOf(step.cmd) !== -1) {
+        // A gear change is configuration, not driving: it is sent once and the
+        // heartbeat that is already keeping the wheels alive carries on untouched.
+      } else if (step.cmd === 'S') {
         stopDriveHeartbeat();
+      } else {
+        startDriveHeartbeat(step.cmd);
       }
 
       const next = trickSteps[index + 1];
@@ -3110,7 +3166,7 @@
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
           trickSteps = parsed
-            .filter(s => s && typeof s.cmd === 'string' && s.cmd.length === 1 && typeof s.t === 'number')
+            .filter(s => s && isTrickCmd(s.cmd) && typeof s.t === 'number' && Number.isFinite(s.t))
             .slice(0, TRICK_MAX_STEPS);
         }
       } catch (e) { trickSteps = []; }
@@ -3152,7 +3208,14 @@
     async function acquireMissionWakeLock() {
       try {
         if (!('wakeLock' in navigator) || missionWakeLock) return;
-        missionWakeLock = await navigator.wakeLock.request('screen');
+        const gen = disarmGeneration;
+        const lock = await navigator.wakeLock.request('screen');
+        if (gen !== disarmGeneration) {
+          // The pilot disarmed while the browser was granting the lock. Hand it back.
+          try { lock.release(); } catch (e) {}
+          return;
+        }
+        missionWakeLock = lock;
         missionWakeLock.addEventListener('release', () => { missionWakeLock = null; });
       } catch (e) { missionWakeLock = null; } // unsupported or refused: nothing changes
     }
@@ -3185,8 +3248,17 @@
 
       currentActiveMission = modeChar;
       missionStartTime = Date.now();
-      
+
+      // 🛑 The write below can take a while. If the pilot brakes (or the phone
+      // hides) during it, disarmAll() already tore everything down — arming a
+      // keepalive and a compass listener afterwards would quietly re-arm the robot.
+      const gen = disarmGeneration;
       await sendCommand(modeChar);
+      if (gen !== disarmGeneration || !rxTxChar || document.hidden) {
+        if (gen === disarmGeneration) currentActiveMission = null; // never armed: do not pretend
+        return;
+      }
+
       startMissionKeepalive();
       // 🧭 Follow Me is the only mission that listens for the heading hint.
       if (modeChar === '5') startHeadingHint(); else stopHeadingHint();
