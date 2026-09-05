@@ -137,8 +137,11 @@ uint16_t gFollowFilteredDist = 20;
 uint16_t gLatestRawDist = 0; // Unfiltered nearest sonar return for immediate safety stop
 uint16_t gDistanceHistory[5] = {20, 20, 20, 20, 20};
 uint8_t gHistoryIdx = 0;
+uint8_t gSonarZeroRun = 0;          // F6: consecutive no-echo pings
+const uint8_t kSonarZeroLost = 6;   // F6: this many in a row == target LOST
 unsigned long gLastIdleChirpTime = 0;
 bool gFollowLockAcquired = false;
+bool gPrevFollowLocked = false; // F9: previous pass's lock state (heartbeat reset edge)
 
 // Focus Clock (mode 10): a real sitting clock that lives in the robot, not the phone.
 uint8_t gFocusMinutes = 25;
@@ -321,7 +324,7 @@ void setGear(SpeedGear newGear);
 void checkControlInput();
 void executeCurrentMode();
 bool safeMotorDelay(unsigned long ms, bool checkCliff = true, bool checkSonar = false);
-size_t readFramedPayload(char* buffer, size_t maxLen, unsigned long timeoutMs = 120);
+size_t readFramedPayload(char* buffer, size_t maxLen, unsigned long timeoutMs = 60);
 
 void matrixInit();
 void displayBitmap(const uint8_t* bitmap);
@@ -473,7 +476,10 @@ void setup() {
   displayBitmap(kIconBluetooth);
 }
 
+extern bool gProbeServicedThisPass;
+
 void loop() {
+  gProbeServicedThisPass = false; // F4: one '?' or '=' probe per pass, at most
   serviceChirpNB(); // advance any chirp that is playing while the wheels turn
   checkControlInput();
   executeCurrentMode();
@@ -579,25 +585,25 @@ void setMode(RobotMode newMode) {
 /**
  * Safe Framed Payload Reader:
  * Reads characters until '\n' into buffer (null-terminated).
- * If the incoming payload exceeds maxLen-1, overflow is set and the remainder of the
- * line is continuously drained until '\n' is reached.
- * If overflow occurred or timeout expired before '\n', the buffer is cleared (buffer[0] = '\0')
- * and 0 is returned.
- * Invariant: NEVER leaves leftover payload characters in Serial to be misparsed as opcodes!
+ *
+ * F1 — ABSOLUTE DEADLINE: the timeout is measured from the FIRST call, never reset
+ * per byte, so a sender dripping one byte per 100 ms can no longer hold the loop
+ * (and both watchdogs) hostage. On deadline expiry OR buffer overflow the reader
+ * gives up immediately and arms gDiscardToNewline: every byte after that is
+ * consumed and thrown away by the parser until a '\n' arrives, so a late tail can
+ * never be re-read as opcodes on a later loop pass.
+ * A complete frame still returns normally with its length.
  */
+bool gDiscardToNewline = false;
+
 size_t readFramedPayload(char* buffer, size_t maxLen, unsigned long timeoutMs) {
+  if (maxLen > 0) buffer[0] = '\0';
   size_t count = 0;
-  bool overflow = false;
-  unsigned long start = millis();
+  unsigned long start = millis(); // ABSOLUTE deadline — never reset per byte
   while (millis() - start < timeoutMs) {
     if (Serial.available()) {
-      start = millis(); // Reset timeout on each received byte
       char c = (char)Serial.read();
       if (c == '\n') {
-        if (overflow) {
-          if (maxLen > 0) buffer[0] = '\0';
-          return 0; // Oversized frame safely dropped; stream drained!
-        }
         if (count < maxLen) buffer[count] = '\0';
         else if (maxLen > 0) buffer[maxLen - 1] = '\0';
         return count;
@@ -606,47 +612,50 @@ size_t readFramedPayload(char* buffer, size_t maxLen, unsigned long timeoutMs) {
       if (count < maxLen - 1) {
         buffer[count++] = c;
       } else {
-        overflow = true; // Buffer capacity exceeded; continue draining until '\n'
+        // Oversized frame: stop parsing NOW and drop the rest of the line.
+        if (maxLen > 0) buffer[0] = '\0';
+        gDiscardToNewline = true;
+        return 0;
       }
     }
   }
-  // Timed out before '\n' reached: reject payload
+  // Deadline hit before '\n': reject payload and drop whatever tail follows.
   if (maxLen > 0) buffer[0] = '\0';
+  gDiscardToNewline = true;
   return 0;
 }
+// F4: at most ONE pulseIn-heavy probe ('?' or '=') is serviced per loop pass, and the
+// parser reads at most kParserBytesPerPass bytes per pass, so a flooded link can never
+// starve executeCurrentMode() or either watchdog. Reset at the top of loop().
+bool gProbeServicedThisPass = false;
+const uint8_t kParserBytesPerPass = 32;
+
 void checkControlInput() {
-  while (Serial.available() > 0) {
+  uint8_t bytesThisPass = 0;
+  while (Serial.available() > 0 && bytesThisPass < kParserBytesPerPass) {
+    bytesThisPass++;
+
+    // F1: a rejected frame's tail is swallowed here — never parsed as opcodes.
+    if (gDiscardToNewline) {
+      char d = (char)Serial.read();
+      // An 'S' still brakes even while a rejected frame is being flushed.
+      if (d == 'S' || d == 's') {
+        haltMotors(); stopAllAudio();
+        gCurrentMode = MODE_BLUETOOTH_RC;
+        gMotorActive = false;
+        gFollowLockAcquired = false;
+        displayBitmap(kIconBrake);
+      }
+      if (d == '\n') gDiscardToNewline = false;
+      continue;
+    }
+
     char ch = Serial.read();
     gLastIdleChirpTime = millis(); // Reset idle timer on any user touch
 
-    // 0. FILTER ALL HM-10 BLE STATUS BANNERS (e.g. "+CONNECTED", "OK+CONN", "OK+LOST")
-    if (ch == '+' || ch == 'O' || ch == 'o') {
-      char bannerBuf[24];
-      uint8_t bLen = 0;
-      bannerBuf[bLen++] = ch;
-      unsigned long bannerStart = millis();
-      while (millis() - bannerStart < 35) {
-        if (Serial.available()) {
-          bannerStart = millis();
-          char b = Serial.read();
-          if (b == '\n' || b == '\r') break;
-          if (bLen < sizeof(bannerBuf) - 1) bannerBuf[bLen++] = b;
-        }
-      }
-      bannerBuf[bLen] = '\0';
-
-      // 🛑 CRITICAL LINK-LOSS INTERLOCK: If Bluetooth link died, HALT MOTORS IMMEDIATELY!
-      if (strstr(bannerBuf, "LOST") != NULL || strstr(bannerBuf, "DISC") != NULL) {
-        haltMotors();
-        stopAllAudio();
-        gCurrentMode = MODE_BLUETOOTH_RC;
-        gMotorActive = false;
-        displayBitmap(kIconBrake);
-      }
-      continue; // Swallowed banner completely — never triggers rogue motor or mood action!
-    }
-
-    // 1. EMERGENCY BRAKE
+    // F5: 🛑 EMERGENCY BRAKE IS THE VERY FIRST THING AFTER Serial.read().
+    // It used to sit behind the HM-10 banner filter, so an 'S' arriving mid-banner
+    // could be swallowed. Nothing is allowed in front of the stop any more.
     if (ch == 'S' || ch == 's') {
       haltMotors();
       stopAllAudio();
@@ -656,9 +665,42 @@ void checkControlInput() {
       displayBitmap(kIconBrake);
       digitalWrite(kPinStatusLed, LOW);
       chirpBrake();
+      continue;
     }
+
+    // 0. FILTER ALL HM-10 BLE STATUS BANNERS (e.g. "+CONNECTED", "OK+CONN", "OK+LOST")
+    if (ch == '+' || ch == 'O' || ch == 'o') {
+      char bannerBuf[24];
+      uint8_t bLen = 0;
+      bannerBuf[bLen++] = ch;
+      bool stopInBanner = false;
+      unsigned long bannerStart = millis();
+      while (millis() - bannerStart < 35) {
+        if (Serial.available()) {
+          bannerStart = millis();
+          char b = Serial.read();
+          // F5: an 'S' inside the collected text stops the drain AND the wheels.
+          if (b == 'S' || b == 's') { stopInBanner = true; break; }
+          if (b == '\n' || b == '\r') break;
+          if (bLen < sizeof(bannerBuf) - 1) bannerBuf[bLen++] = b;
+        }
+      }
+      bannerBuf[bLen] = '\0';
+
+      // 🛑 CRITICAL LINK-LOSS INTERLOCK: If Bluetooth link died, HALT MOTORS IMMEDIATELY!
+      if (stopInBanner || strstr(bannerBuf, "LOST") != NULL || strstr(bannerBuf, "DISC") != NULL) {
+        haltMotors();
+        stopAllAudio();
+        gCurrentMode = MODE_BLUETOOTH_RC;
+        gMotorActive = false;
+        if (stopInBanner) gFollowLockAcquired = false;
+        displayBitmap(kIconBrake);
+      }
+      continue; // Swallowed banner completely — never triggers rogue motor or mood action!
+    }
+
     // 2. MASTER AUDIO MUTE CONTROL ('x' = Absolute Mute, 'X' = Absolute Unmute)
-    else if (ch == 'x') {
+    if (ch == 'x') {
       gMasterMute = true;
       saveEepromMute(true);
       stopAllAudio();
@@ -698,7 +740,6 @@ void checkControlInput() {
     }
     // 9. Morse Code Academy Broadcaster ('T' + letter/dit/dah + '\n')
     else if (ch == 'T' || ch == 't') {
-      gLastKeepaliveTime = millis();
       char tBuf[8];
       size_t n = readFramedPayload(tBuf, sizeof(tBuf));
       if (n > 0) {
@@ -710,7 +751,6 @@ void checkControlInput() {
     }
     // 10. Chiptune Jukebox Payloads ('J' + 1-4 + '\n') (Guarded Payload Isolation)
     else if (ch == 'J' || ch == 'j') {
-      gLastKeepaliveTime = millis();
       haltMotors();
       gMotorActive = false;
       char jBuf[8];
@@ -725,7 +765,6 @@ void checkControlInput() {
     }
     // 11. Live 8x8 Pixel Art Streaming ('M' + 16 hex chars + '\n')
     else if (ch == 'M' || ch == 'm') {
-      gLastKeepaliveTime = millis();
       char mBuf[24];
       size_t n = readFramedPayload(mBuf, sizeof(mBuf));
       uint8_t customBuf[8];
@@ -755,21 +794,18 @@ void checkControlInput() {
     }
     // 12. Sonic Horn (Dual R2-D2 Astromech Chirp Blast!)
     else if (ch == 'h' || ch == 'H') {
-      gLastKeepaliveTime = millis();
       chirpSweep(1800, 1100, 90, 3);
       delay(20);
       chirpSweep(1300, 2400, 110, 3);
     }
     // 13. Gemini Vision AI Target Lock-On ('V')
     else if (ch == 'V' || ch == 'v') {
-      gLastKeepaliveTime = millis();
       chirpVisionLock();
     }
     // 14. Real-time Variable Speed Throttle ('P' + digits) - NON-BLOCKING & DISCARD-SAFE
     // This is the cockpit slider's opcode and NOTHING else: it never changes mode.
     // The Focus Clock has its own framed opcode '^' below.
     else if (ch == 'P' || ch == 'p') {
-      gLastKeepaliveTime = millis();
       int targetSpeed = 0;
       unsigned long pStart = millis();
       while (millis() - pStart < 25) {
@@ -778,7 +814,23 @@ void checkControlInput() {
           if (digit >= '0' && digit <= '9') {
             targetSpeed = targetSpeed * 10 + (Serial.read() - '0');
           } else {
-            break; // Non-digit remains in buffer, emergency stop 'S' is NEVER eaten!
+            // F2: the throttle frame's tail is CONSUMED, never left for the parser.
+            // "P120F\n" used to set the speed and then execute the 'F'. A newline or
+            // CR simply ends the frame; ANY other byte means the frame is malformed,
+            // so the rest of that line is dropped and can never become a motion command.
+            Serial.read();
+            if (digit != '\n' && digit != '\r') {
+              gDiscardToNewline = true;
+              // An 'S' is still never eaten: it brakes even inside a bad frame.
+              if (digit == 'S' || digit == 's') {
+                haltMotors(); stopAllAudio();
+                gCurrentMode = MODE_BLUETOOTH_RC;
+                gMotorActive = false;
+                gFollowLockAcquired = false;
+                displayBitmap(kIconBrake);
+              }
+            }
+            break;
           }
         }
       }
@@ -790,12 +842,10 @@ void checkControlInput() {
     }
     // 15. Grandmaster Knight L-Path Maneuver ('Z')
     else if (ch == 'Z' || ch == 'z') {
-      gLastKeepaliveTime = millis();
       runKnightLPathManeuver();
     }
     // 16. Dedicated Real-Time Face Clock ('@' + time string + '\n') - Fixed buffer, zero malloc
     else if (ch == '@') {
-      gLastKeepaliveTime = millis();
       haltMotors();
       gCurrentMode = MODE_BLUETOOTH_RC;
       char clockBanner[24];
@@ -822,7 +872,6 @@ void checkControlInput() {
     }
     // 17. Text Marquee Banner Streamer ('W' + string + '\n') - Fixed buffer, zero malloc
     else if (ch == 'W') {
-      gLastKeepaliveTime = millis();
       haltMotors();
       char textBanner[24];
       size_t n = readFramedPayload(textBanner, sizeof(textBanner));
@@ -846,7 +895,6 @@ void checkControlInput() {
     }
     // 18. Serene Static 8x8 Digital Clock ('#' + "HHMM\n") - Validated digits & clamped
     else if (ch == '#') {
-      gLastKeepaliveTime = millis();
       haltMotors();
       gCurrentMode = MODE_BLUETOOTH_RC;
       char timeDigits[12];
@@ -867,24 +915,24 @@ void checkControlInput() {
     }
     // 20. Astromech Emotional Expressions (A=Yes, Y=Ecstasy, D=Grumpy, C=Fatigued)
     else if (ch == 'A' || ch == 'a') {
-      gLastKeepaliveTime = millis();
       runSayingYesMood();
     }
     else if (ch == 'Y' || ch == 'y') {
-      gLastKeepaliveTime = millis();
       runEcstasyMood();
     }
     else if (ch == 'D' || ch == 'd') {
-      gLastKeepaliveTime = millis();
       runGrumpyMood();
     }
     else if (ch == 'C' || ch == 'c') {
-      gLastKeepaliveTime = millis();
       runFatiguedMood();
     }
     // 21. Telemetry & EEPROM Diagnostics Query ('?')
+    // F3: '?' is a QUERY, not a keepalive — it must not keep an unattended
+    // autonomous mission alive. Only '!' / '*' and mode entry refresh the deadman.
+    // F4: at most one pulseIn-heavy probe per loop pass.
     else if (ch == '?') {
-      gLastKeepaliveTime = millis();
+      if (gProbeServicedThisPass) continue;
+      gProbeServicedThisPass = true;
       uint16_t missionCount = 0;
       EEPROM.get(EEPROM_RUNS_ADDR, missionCount);
       Serial.print(F("WALL-E|GEAR:"));
@@ -927,7 +975,6 @@ void checkControlInput() {
     // clock in the middle of a drive. Framed and drained to '\n' exactly like
     // '~' and '%', so the digits can never leak back into the parser.
     else if (ch == '^') {
-      gLastKeepaliveTime = millis();
       char fBuf[6];
       size_t n = readFramedPayload(fBuf, sizeof(fBuf));
       if (n > 0) {
@@ -948,6 +995,8 @@ void checkControlInput() {
     // droid computes from it. Shivansh measures the wall with a tape and works out the
     // speed of sound himself: speed = 2 x distance / time. No motion, no mode change.
     else if (ch == '=') {
+      if (gProbeServicedThisPass) continue; // F4: one probe per loop pass
+      gProbeServicedThisPass = true;
       uint16_t cm = getDistanceCm(); // same read as every mode, same fault latches
       Serial.print(F("ECHO:"));
       Serial.print(gLastEchoMicros);
@@ -1140,7 +1189,22 @@ void runObstacleMode() {
   // 0. NOTHING AHEAD WITHIN RANGE (no echo). This is the middle of a big room,
   // not a broken sensor: creep forward slowly and re-ping often. safeMotorDelay's
   // sonar veto still fires the instant a real return under 18cm appears.
-  if (dist == 0) {
+  // F7: ...but the creep gets a TIME BUDGET. A real room always returns an echo
+  // within a few seconds; six seconds of unbroken silence means the sonar is gone,
+  // not that the room is big. Stop, say so, and fall back to Standby.
+  static unsigned long creepStart = 0;
+  if (dist != 0) {
+    creepStart = 0; // a real ping resets the budget
+  } else {
+    if (creepStart == 0) creepStart = millis();
+    else if (millis() - creepStart > 6000UL) {
+      creepStart = 0;
+      haltMotors();
+      chirpAlert(); // respects gMasterMute internally
+      displayBitmap(kIconStandby);
+      setMode(MODE_STANDBY);
+      return;
+    }
     displayBitmap(kArrowForward);
     driveForward(140); // deliberately slower than the 175 cruise
     safeMotorDelay(20, true, true);
@@ -1355,9 +1419,23 @@ void runLivingPetEngine() {
     return;
   }
 
+  // F6: the sonar has answered "nothing" kSonarZeroLost times in a row. That is not a
+  // reading, it is silence — drop the lock, stop, and let the handshake ritual below
+  // re-acquire. The sonar is NOT marked faulted here: only a stuck-HIGH echo pin does
+  // that, and the single-sensor degradation branch (§4) still keys on gSonarFault alone.
+  if (sonarHealthy && gFollowLockAcquired && gSonarZeroRun >= kSonarZeroLost) {
+    haltMotors();
+    gFollowLockAcquired = false;
+    displayBitmap(kIconStandby);
+  }
+
   // 3. Initial Handshake Lock Ritual (Wait for Pilot to stand in front before rolling!)
   if (!gFollowLockAcquired) {
-    resetFollowHeartbeat(); // B2: no lock, no pulse — and D13 left LOW for §8
+    // F9: reset the pulse only on the lock -> unlocked TRANSITION. It used to run on
+    // every unlocked pass, which cleared D13 one pass after the lost-timeout branch
+    // below lit it, so the "where did you go?" blink was never visible.
+    if (gPrevFollowLocked) resetFollowHeartbeat(); // B2: no lock, no pulse — D13 LOW
+    gPrevFollowLocked = false;
     haltMotors();
     displayBitmap(kIconStandby);
 
@@ -1409,6 +1487,7 @@ void runLivingPetEngine() {
   // B2: Lock is held — the droid has a pulse. D13 beats for the whole of Follow
   // Me; the matrix heart below is used only by the two resting branches (§5
   // close-range and §6 sweet spot), so arrows, brake and standby are untouched.
+  gPrevFollowLocked = true; // F9: mark the lock so the next unlock is a real transition
   const uint8_t* heartFrame = tickFollowHeartbeat(sonarHealthy ? dist : 0);
 
   // 4. DEGRADATION MATRIX: SONAR DOWN -> LDR bearing + PIR gate, NO range: cap speed, shorten legs, stop often
@@ -2857,6 +2936,9 @@ void arcDrive(uint8_t leftPwm, uint8_t rightPwm) {
 }
 
 uint16_t getDistanceCm() {
+  // F8: clear the Echo Lab reading FIRST, so the stuck-high early return below can
+  // never hand back the flight time of a previous, unrelated ping.
+  gLastEchoMicros = 0;
   // Stuck-high echo before trigger indicates hardware electrical fault
   if (digitalRead(kPinUltrasonicEcho) == HIGH) {
     gSonarFault = true;
@@ -2889,9 +2971,23 @@ uint16_t getDistanceCm() {
   return (uint16_t)((duration + 29UL) / 58UL);
 }
 
+// F6: a silent sonar must not look like a steady reading. The median below excludes
+// zeros, so a sonar returning 0 (unplugged, echo floating low) used to leave the last
+// good median in place and Follow Me kept driving on it. Count the consecutive zeros:
+// after kSonarZeroLost of them the filter reports 0 — "I cannot see" — and Follow Me
+// drops its lock and runs the normal lost/search behaviour.
 uint16_t getFilteredDistance() {
   uint16_t raw = getDistanceCm();
   gLatestRawDist = raw;
+  if (raw == 0) {
+    if (gSonarZeroRun < 255) gSonarZeroRun++;
+  } else {
+    gSonarZeroRun = 0;
+  }
+  if (gSonarZeroRun >= kSonarZeroLost) {
+    gFollowFilteredDist = 0;
+    return 0; // stale median deliberately NOT returned
+  }
   if (raw > 0 && raw < 400) {
     gDistanceHistory[gHistoryIdx] = raw;
     gHistoryIdx = (gHistoryIdx + 1) % 5;
