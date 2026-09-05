@@ -717,6 +717,11 @@
         <button class="btn-toggle-mini active" id="gear2" onclick="shiftGear(2, 'w')" aria-label="Gear 2 Rapid Cruise 65%">⏱️ Rapid (65%)</button>
         <button class="btn-toggle-mini" id="gear3" onclick="shiftGear(3, 'e')" aria-label="Gear 3 Blitz Turbo 100%">⚡ Blitz (100%)</button>
       </div>
+      <!-- 🛋️/🪑 FLOOR / DESK: the edge sensors only make sense on a table. Boot is Floor. -->
+      <div style="width:100%; display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px;">
+        <button class="btn-toggle-mini active" id="surfFloor" onclick="setSurface('F')" aria-label="Floor mode: edge sensors off, deadman and sonar stay on">🛋️ FLOOR · free to roam</button>
+        <button class="btn-toggle-mini" id="surfDesk" onclick="setSurface('D')" aria-label="Desk mode: edge sensors guard the table edge">🪑 DESK · edge guard on</button>
+      </div>
     </div>
 
     <!-- 📯 HORN, KNIGHT'S L-MOVE & BRAKE -->
@@ -2557,6 +2562,24 @@
     }
 
     // ========================================================================
+    // 🛋️/🪑 FLOOR / DESK — the edge veto only makes sense on a table (dad's call).
+    // '%F' / '%D' are framed data; the deadman, brake and sonar stop are untouched.
+    // ========================================================================
+    function reflectSurface(which) {
+      const f = document.getElementById('surfFloor'), d = document.getElementById('surfDesk');
+      if (f) f.classList.toggle('active', which !== 'D');
+      if (d) d.classList.toggle('active', which === 'D');
+    }
+    function setSurface(which) {
+      sendCommand(which === 'D' ? '%D\n' : '%F\n');
+      reflectSurface(which);
+      const hud = document.getElementById('hudLog');
+      if (hud) hud.innerText = which === 'D'
+        ? '[SURFACE] \uD83E\uDE91 Desk mode \u2014 the edge sensors are guarding the table.'
+        : '[SURFACE] \uD83D\uDECB\uFE0F Floor mode \u2014 free to roam. Deadman, brake and sonar stay on.';
+    }
+
+    // ========================================================================
     // 🔊 ECHO LAB — the droid fires one ping ('=') and replies ECHO:<us>|CM:<n>.
     // Speed of sound = 2 x tape distance / flight time. The reply arrives as DATA
     // on the same telemetry path as the diary; nothing here can move a motor.
@@ -2619,6 +2642,10 @@
             const em = line.match(/^ECHO:(\d{1,7})us\|CM:(\d{1,4})$/);
             if (em) echoLabShow(parseInt(em[1], 10), parseInt(em[2], 10));
             continue;
+          }
+          if (line.indexOf("S2-R2-D2|") === 0) {
+            const g = line.match(/\|GUARD:([DF])\|/);   // show which surface the robot thinks it is on
+            if (g) reflectSurface(g[1]);
           }
           if (droidDiaryGreeted) continue;
           if (line.indexOf("S2-R2-D2|") !== 0) continue; // not ours: ignore entirely
@@ -2769,7 +2796,7 @@
         let cmd = rawCmd;
         if (typeof cmd === 'string') {
           const first = cmd.charAt(0);
-          if (['T', 'J', 'M', '@', 'W', '#', 'P'].includes(first)) {
+          if (['T', 'J', 'M', '@', 'W', '#', 'P', '%'].includes(first)) {
             if (!cmd.endsWith('\n')) cmd += '\n';
           }
           if (first === '@' || first === 'W') {
