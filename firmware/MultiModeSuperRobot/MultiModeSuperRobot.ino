@@ -35,7 +35,7 @@ const uint8_t kPinMotorRightDir  = A1;   // Right Motor Phase
 const uint8_t kPinStatusLed      = LED_BUILTIN;
 
 // Expansion Port Pins
-const uint8_t kPinLdrFollow    = A0; // Photocell (LDR) on A0 for continuous bearing tracking
+const uint8_t kPinLdrFollow    = A6; // Photocell (LDR): the kit's light port is A6/A7 (signal on A6). A0 is the ONBOARD SOUND SENSOR — never the light sensor.
 const uint8_t kPinExpansionA2  = A2;
 const uint8_t kPinExpansionA3  = A3;
 const uint8_t kPinExpansionD12 = 12;
@@ -851,6 +851,8 @@ void checkControlInput() {
       Serial.print(gMasterMute ? 1 : 0);
       Serial.print(F("|BOOTS:"));
       Serial.print(missionCount);
+      Serial.print(F("|LIGHT:"));
+      Serial.print(analogRead(kPinLdrFollow));
       Serial.print(F("|MODE:"));
       Serial.print((uint8_t)gCurrentMode);
       Serial.print(F("|FREE:"));
