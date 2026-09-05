@@ -835,6 +835,13 @@
       </div>
       <div class="btn-card-action">ENGAGE</div>
     </div>
+    <!-- 🧭 COMPASS HINT: off by default. It tells the droid "the pilot turned right", which is
+         only true when the pilot walks AWAY from it. Walking backwards facing the robot (torch
+         in hand) inverts every hint — so it is a switch for the walking-away game only. -->
+    <label style="display:flex; align-items:center; gap:8px; font-size:0.72rem; color:var(--neon-cyan); margin:-4px 0 10px 6px; cursor:pointer;" onclick="event.stopPropagation()">
+      <input type="checkbox" id="chkHeadingHint" onchange="setHeadingHintEnabled(this.checked)" style="accent-color:var(--neon-cyan);">
+      🧭 Phone compass hint — only when the pilot walks <b>away</b> from the droid
+    </label>
 
     <!-- 🚪 THE SICILIAN FORTRESS (DOOR GUARD) -->
     <div class="feature-card" data-mode="9" onclick="triggerMode('9', '🚪 The Sicilian Fortress Active: Counting visitors!')">
@@ -3227,7 +3234,17 @@
       sendCommand(`~${deg >= 0 ? '+' : ''}${deg}\n`);
     }
 
+    let headingHintEnabled = false; // opt-in: see the label under the Follow Me card
+    function setHeadingHintEnabled(on) {
+      headingHintEnabled = !!on;
+      if (!headingHintEnabled) stopHeadingHint();
+      const hud = document.getElementById('hudLog');
+      if (hud) hud.innerText = headingHintEnabled
+        ? '[COMPASS] \uD83E\uDDED Hint on \u2014 walk AWAY from the droid for this to help.'
+        : '[COMPASS] Hint off \u2014 the droid steers by torch, sonar and heat only.';
+    }
     function startHeadingHint() {
+      if (!headingHintEnabled) return;
       if (headingHintActive) return;
       if (typeof DeviceOrientationEvent === 'undefined') return;
       if (typeof DeviceOrientationEvent.requestPermission === 'function' && !gOrientationPermissionGranted) return;
