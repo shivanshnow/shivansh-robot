@@ -7,7 +7,7 @@ Embedded Systems Architecture CS140 / CS107: Distributed Systems & Embedded Inte
 File: bt_remote.py
 Author: Pilot Shivansh & Antigravity AI Pair-Programmer
 Target Architecture: macOS CoreBluetooth / Bleak Asyncio Client Engine
-Platform: Kidsbits Multi-Purpose Coding Robot (Model KD0003)
+Platform: WALL-E / Kidsbits Multi-Purpose Coding Robot (Model KD0003)
 
 Description:
   High-throughput, asynchronous Bluetooth Low Energy (BLE) interactive terminal
@@ -39,6 +39,7 @@ GATT_UART_CHAR_UUID: str = "0000ffe1-0000-1000-8000-00805f9b34fb"
 def telemetry_rx_callback(characteristic: BleakGATTCharacteristic, data: bytearray) -> None:
     """
     Handles asynchronous telemetry packets relayed from the robot's ATmega328P.
+    Accepts both current 'WALL-E|' and legacy 'S2-R2-D2|' status frame prefixes.
     
     Parameters:
         characteristic: The GATT characteristic emitting the notification.
@@ -152,7 +153,7 @@ async def run_controller_session() -> None:
     Main asynchronous event loop managing the BLE GATT lifecycle and keyboard dispatch.
     """
     print("========================================================")
-    print(" SHIVANSH MECHA OS: Kidsbits Robot Mac Terminal Cockpit       ")
+    print(" SHIVANSH MECHA OS: WALL-E Mac Terminal Cockpit         ")
     print(" Pilot: Shivansh | Protocol: BLE GATT 9600 Baud         ")
     print("========================================================")
 

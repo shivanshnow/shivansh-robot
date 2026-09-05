@@ -1,6 +1,6 @@
 # ⚡ MECHA OS • MASTER CATALOG & ROADMAP
-**`S2-R2-D2` Autonomous Droid Companion Platform • Master Product Plan**
-*Platform: `S2-R2-D2` (Kidsbits KD0003 ATmega328P + Web Bluetooth AI Cortex)*
+**`WALL-E` Autonomous Droid Companion Platform • Master Product Plan**
+*Platform: `WALL-E` (Kidsbits KD0003 ATmega328P + Web Bluetooth AI Cortex)*
 *Status: Production OS Active & Calibrated • Complete Product Suite with All Classic Modes Restored*
 
 ---
@@ -13,7 +13,7 @@
   ║ 1. Physical Mount: Unfold bottom fingers & clip onto top deck plate.   ║
   ║ 2. Video Feed: Live Quik Preview / Web Share to Cockpit `<video>`.     ║
   ║ 3. AI Reasoning: Gemini Robotics ER 2 processes object coordinates.    ║
-  ║ 4. BLE Closed-Loop: Web Bluetooth streams motor vectors to `S2-R2-D2`!   ║
+  ║ 4. BLE Closed-Loop: Web Bluetooth streams motor vectors to `WALL-E`!     ║
   ╚════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -46,7 +46,7 @@
   * `⚡ Blitz Turbo (Gear 3 / 'e'):` 100% (255 PWM) — Maximum velocity floor sprint.
 * **📯 Honk Horn & Emergency Brake:** Acoustic horn beep button + high-priority 48px Emergency Brake switch.
 * **📱 Tilt Steering:** Calibrated accelerometer drive with neutral baseline latch and ±15° deadband.
-* **🎨 Draw on Droid Face:** Tap pixels to draw glowing art live on `S2-R2-D2`'s 8x8 matrix face.
+* **🎨 Draw on Droid Face:** Tap pixels to draw glowing art live on `WALL-E`'s 8x8 matrix face.
 * **🎭 Animated Face Show:** Cycles smiling eyes, winks 😉, and pulsing hearts ❤️.
 
 ---
@@ -106,4 +106,4 @@
 ```
 
 ---
-*Maintained by Pilot Shivansh & Antigravity AI Pair-Programmer • Platform: `S2-R2-D2`* 🚀✨🎉🤖
+*Maintained by Pilot Shivansh & Antigravity AI Pair-Programmer • Platform: `WALL-E`* 🚀✨🎉🤖

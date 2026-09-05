@@ -1,4 +1,4 @@
-# 💥 S2-R2-D2: THE ASTROMECH CHRONICLES! 🤖
+# 💥 WALL-E: THE ASTROMECH CHRONICLES! 🤖
 ### *The Epic True Story of an 8-Year-Old Maker, His Parents & Frontier AI Building a Living Star Wars Droid!*
 
 [![🎮 Launch Web Cockpit](https://img.shields.io/badge/🎮_TAP_TO_FLY!-Launch_Cockpit-00f2fe?style=for-the-badge&logo=googlechrome&logoColor=white)](https://shivanshnow.github.io/shivansh-robot/)
@@ -13,18 +13,18 @@
   ╔═════════════════════════════════════════════════════════════════════════════╗
   ║   ⭐ *BEEP-BOOP-WHEEEEEEE-CHIRP!* ⭐                                        ║
   ║                                                                             ║
-  ║       ____  ____        ____  ____        ____  ____                        ║
-  ║      / ___||___ \      |  _ \|___ \      |  _ \___ \                        ║
-  ║      \___ \  __) |_____| |_) | __) |_____| | | |__) |                       ║
-  ║       ___) |/ __/|_____|  _ < / __/|_____| |_| / __/                        ║
-  ║      |____/|_____|     |_| \_\_____|     |____/_____|                       ║
+  ║            __        __     _      _       _               _____            ║
+  ║            \ \      / /    / \    | |     | |             | ____|           ║
+  ║             \ \ /\ / /    / _ \   | |     | |      _____  |  _|             ║
+  ║              \ V  V /    / ___ \  | |___  | |___  |_____| | |___            ║
+  ║               \_/\_/    /_/   \_\ |_____| |_____|         |_____|           ║
   ║                                                                             ║
   ║   👑 LEAD PILOT: King Shivansh (2 Years Robotics & Sensor Intuition!)       ║
   ║   💖 THE ROOT SEED: Mom (Nurtured the Wonder & Passion for Science!)        ║
   ║   🛠️ CO-BUILDER: Dad (The Soldering Iron Master & Midnight Navigator!)     ║
   ║   🎁 THE CATALYST: Anshul (Gifted the Kit That Made Hacking Irresistible!) ║
   ║   🤖 THE SQUAD: Antigravity (AGY) + Gemini Robotics ER-2 + AI Council       ║
-  ║   🚀 THE HERO: S2-R2-D2 (Autonomous Mobile Rover & Living Desk Sentry!)     ║
+  ║   🚀 THE HERO: WALL-E (Autonomous Mobile Rover & Living Desk Sentry!)       ║
   ╚═════════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -34,7 +34,7 @@
 
 ```
    ┌───────────────────────┐   ┌───────────────────────┐   ┌───────────────────────┐   ┌───────────────────────┐   ┌───────────────────────┐
-   │ 👑 KING SHIVANSH      │   │ 💖 MOM                │   │ 🛠️ DAD                │   │ 🎁 ANSHUL             │   │ 🤖 S2-R2-D2           │
+   │ 👑 KING SHIVANSH      │   │ 💖 MOM                │   │ 🛠️ DAD                │   │ 🎁 ANSHUL             │   │ 🤖 WALL-E             │
    │ Age: 8 Years Old      │   │ Superpower: Planted   │   │ Superpower: Soldering │   │ Superpower: Gifted the│   │ Superpower: Organic   │
    │ Superpower: 2 Years   │   │ the Robotics Seed &   │   │ Iron Master & Co-Pilot│   │ Kit That Made Hacking │   │ Chirps, Bat Sonar, &  │
    │ Sensor Intuition!     │   │ Nurtured the Wonder!  │   │ on the Carpet!        │   │ Irresistible!         │   │ 360° Victory Spins!   │
@@ -55,7 +55,7 @@ Then came the catalyst: **[Anshul](https://github.com/anshul)** gifted a DIY rob
 Out of the box, the kit had **4 basic factory demo modes** (simple obstacle bumping, basic line tracking, an IR remote, and a short melody). Most people would have assembled the kit, played with those four demos for a weekend, and left it sitting on a shelf.
 
 ```
- [ Gift from Anshul ] ───► 💥 2 YEARS INTUITION + DAD + FRONTIER AI 💥 ───► ⚡ S2-R2-D2! ⚡
+ [ Gift from Anshul ] ───► 💥 2 YEARS INTUITION + DAD + FRONTIER AI 💥 ───► ⚡ WALL-E! ⚡
 ```
 
 But Anshul's gift made the urge to **hack the hardware completely irresistible**. Shivansh and his **Dad** looked at that little yellow chassis and asked:  
@@ -63,7 +63,7 @@ But Anshul's gift made the urge to **hack the hardware completely irresistible**
 
 Who could have imagined a year ago that a father and an 8-year-old maker, pairing late at night with frontier AI agents, could replace basic factory demos with multimodal Gemini ER-2 vision, organic Star Wars voices, gyro tilt flight, and silent desktop sentry companionship on an ordinary microcontroller? 
 
-Together, they built **S2-R2-D2**! 🚀
+Together, they built **WALL-E**! 🚀
 
 ---
 
@@ -91,7 +91,7 @@ This project was born from a **collaborative multi-agent round table**, where Sh
 ```
 
 ### 🗯️ OVERHEARD IN THE WORKSHOP:
-* 👑 **Shivansh:** *"Hey AI! S2-R2-D2 is beeping every time it shows the crown on my desk — it's hurting our ears while studying! Make it completely silent!"*  
+* 👑 **Shivansh:** *"Hey AI! WALL-E is beeping every time it shows the crown on my desk — it's hurting our ears while studying! Make it completely silent!"*  
   🤖 **AI Council:** *\*TYPING AT LIGHT SPEED\** ➔ *"Opcode `@` refactored in C++! Zero beeps, 10-second peaceful crown breath engaged!"*
 * 🛠️ **Dad:** *"We don't need clocks in 4 different tabs. Put it naturally right on the top header pill so one tap streams it straight to the droid's face!"*  
   🤖 **AI Council:** *\*ZAP!\** ➔ *"UI decluttered! 1-tap streaming active!"*
@@ -100,7 +100,7 @@ This project was born from a **collaborative multi-agent round table**, where Sh
 
 ---
 
-## 🚀 EPISODE 3: S2-R2-D2'S 12 EPIC SUPERPOWERS!
+## 🚀 EPISODE 3: WALL-E'S 12 EPIC SUPERPOWERS!
 
 ```
 ┌──────────────────────────────────────┬──────────────────────────────────────┐
@@ -200,7 +200,7 @@ This project was born from a **collaborative multi-agent round table**, where Sh
    > convenience path `~/KidsbitsRobot/MultiModeSuperRobot/MultiModeSuperRobot.ino`
    > is now a **symlink** to it, so opening either one edits the same code and the
    > two can never drift apart again.
-3. Plug the USB cable into S2-R2-D2:
+3. Plug the USB cable into WALL-E:
    > ⚠️ **TOP SECRET MAKER PRO-TIP:** Slide the physical **`BT` switch under the robot to `OFF`** before uploading! *(This keeps the radio lines clear for the code upload!)*
    * Select **Board: Arduino Uno** and choose your USB port.
    * Hit the round **Upload (➔)** button!
@@ -212,17 +212,17 @@ This project was born from a **collaborative multi-agent round table**, where Sh
 
 1. Open **Google Chrome** on your phone/tablet/laptop (or **Bluefy** on iPhone/iPad).
 2. Go to: **[https://shivanshnow.github.io/shivansh-robot/](https://shivanshnow.github.io/shivansh-robot/)**
-3. Tap **`Link Droid`** and choose S2-R2-D2!
+3. Tap **`Link Droid`** and choose WALL-E!
 4. **KA-CHOW! You are in command of a living Astromech Droid!** 🚀
 
 ---
 
 ## 📡 EPISODE 6: SECRET HACKER DECODER TABLE!
-### *Send Single-Letter Radio Signals Directly to S2-R2-D2!*
+### *Send Single-Letter Radio Signals Directly to WALL-E!*
 
 ```
    ┌─────────────┬──────────────────────────────────────────────────────────────┐
-   │ SECRET CODE │ WHAT S2-R2-D2 DOES                                           │
+   │ SECRET CODE │ WHAT WALL-E DOES                                             │
    ├─────────────┼──────────────────────────────────────────────────────────────┤
    │     'F'     │ Drive Forward with smooth acceleration                       │
    │     'B'     │ Drive Backward with a cute warning chirping sound!           │
@@ -244,15 +244,15 @@ This project was born from a **collaborative multi-agent round table**, where Sh
 ---
 
 ## 📚 EPISODE 7: THE SERIOUS SCIENCE BEHIND THE MAGIC!
-### *7 Frontier Research Breakthroughs Utilized in S2-R2-D2*
+### *7 Frontier Research Breakthroughs Utilized in WALL-E*
 
-Every playful beep and turn in S2-R2-D2 is backed by real, published scientific research:
+Every playful beep and turn in WALL-E is backed by real, published scientific research:
 
 1. **Embodied Reasoning (ER-2) & Vision-Language-Action (VLA) in Physical Robotics**:
    * *Google DeepMind (2023–2024). RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control.* arXiv:2307.15818.
    * *Ahn, M., et al. (2022). Do As I Can, Not As I Say: Grounding Language in Robotic Affordances (SayCan).* Google Research.
    * *Google DeepMind (2024). Gemini Robotics ER-2: Embodied Spatial Reasoning & Visual Affordance Mapping.*
-   * *Applied in*: S2-R2-D2's vision cortex — translating live webcam video frames directly into spatial navigation coordinates and steering affordances.
+   * *Applied in*: WALL-E's vision cortex — translating live webcam video frames directly into spatial navigation coordinates and steering affordances.
 
 2. **Multimodal Spatial Reasoning & Zero-Shot Vision AI**:
    * *Google DeepMind (2024). Gemini: A Family of Highly Capable Multimodal Models.*
