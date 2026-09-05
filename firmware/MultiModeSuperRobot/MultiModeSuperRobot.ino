@@ -117,6 +117,15 @@ uint8_t gLineSweepStep = 0;
 // Cliff Sensor Health & Plausibility State
 bool gCliffFault = false;
 uint8_t gCliffRecoveryAttempts = 0;
+
+// FLOOR / DESK (dad's call, 5 Sep 2026). The edge sensors are IR reflectance: on a dark
+// floor they read "no floor" forever and would block all play. So the edge veto is ON only
+// in Desk mode (chosen from the cockpit, or declared by the desk tools over USB) or in Desk
+// Companion, whose whole job is the table edge. Boot = Floor mode. The deadman, the brake
+// and the sonar collision stop are NOT affected by this switch — they stay on always.
+bool gDeskMode = false;
+inline bool edgeGuardActive() { return gDeskMode || gCurrentMode == MODE_CLIFF_DETECTION; }
+inline bool edgeSeen(uint8_t l, uint8_t r) { return edgeGuardActive() && (l == 0 || r == 0 || gCliffFault); }
 unsigned long gCliffForwardDriveStart = 0;
 uint8_t gLastLeftCliffState = 1;
 uint8_t gLastRightCliffState = 1;
@@ -853,10 +862,32 @@ void checkControlInput() {
       Serial.print(missionCount);
       Serial.print(F("|LIGHT:"));
       Serial.print(analogRead(kPinLdrFollow));
+      // Why won't it move? Everything the safety supervisor looks at, in one line.
+      Serial.print(F("|FLOOR:"));
+      Serial.print(digitalRead(kPinLineSensorLeft));   // 1 = floor seen, 0 = edge/dark
+      Serial.print(digitalRead(kPinLineSensorRight));
+      Serial.print(F("|SONAR:"));
+      Serial.print(getDistanceCm());                  // 0 = blind
+      Serial.print(F("|FAULT:"));
+      Serial.print(gCliffFault ? 'C' : '-');
+      Serial.print(gSonarFault ? 'S' : '-');
+      Serial.print(F("|GUARD:"));
+      Serial.print(gDeskMode ? 'D' : 'F');            // D = desk (edge veto on), F = floor
       Serial.print(F("|MODE:"));
       Serial.print((uint8_t)gCurrentMode);
       Serial.print(F("|FREE:"));
       Serial.println(getStackFreeBytes());
+    }
+    // 24. Floor / Desk switch ('%' + 'D' or 'F' + '\n'). Framed and drained like every
+    // payload. 'D' arms the edge veto for the table; 'F' (the boot default) frees the
+    // robot to play on any floor. Desk Companion ignores this and always guards.
+    else if (ch == '%') {
+      char modeBuf[4];
+      size_t n = readFramedPayload(modeBuf, sizeof(modeBuf));
+      if (n > 0) {
+        if (modeBuf[0] == 'D' || modeBuf[0] == 'd') gDeskMode = true;
+        else if (modeBuf[0] == 'F' || modeBuf[0] == 'f') gDeskMode = false;
+      }
     }
     // 23. Echo Lab probe ('='): one ping, raw flight time in microseconds + the cm the
     // droid computes from it. Shivansh measures the wall with a tape and works out the
@@ -928,7 +959,7 @@ void executeCurrentMode() {
     uint8_t leftCliff  = digitalRead(kPinLineSensorLeft);
     uint8_t rightCliff = digitalRead(kPinLineSensorRight);
     uint16_t dist = getDistanceCm();
-    if (leftCliff == 0 || rightCliff == 0 || gCliffFault || (dist > 0 && dist < 15)) {
+    if (edgeSeen(leftCliff, rightCliff) || (dist > 0 && dist < 15)) {
       haltMotors();
       gMotorActive = false;
       displayBitmap(kIconBrake);
@@ -980,7 +1011,7 @@ bool safeMotorDelay(unsigned long ms, bool checkCliff, bool checkSonar) {
     if (checkCliff) {
       uint8_t leftCliff  = digitalRead(kPinLineSensorLeft);
       uint8_t rightCliff = digitalRead(kPinLineSensorRight);
-      if (leftCliff == 0 || rightCliff == 0 || gCliffFault) {
+      if (edgeSeen(leftCliff, rightCliff)) {
         haltMotors();
         gMotorActive = false;
         return false;
@@ -1022,7 +1053,7 @@ void runObstacleMode() {
   // 🛑 CLIFF DETECTION FIRST (Table edge safety guard)
   uint8_t leftCliff = digitalRead(kPinLineSensorLeft);
   uint8_t rightCliff = digitalRead(kPinLineSensorRight);
-  if (leftCliff == 0 || rightCliff == 0 || gCliffFault) {
+  if (edgeSeen(leftCliff, rightCliff)) {
     haltMotors();
     talkAstromech(EMOTION_ALERT);
     driveBackward(kAutoDriveSpeed);
@@ -1174,7 +1205,7 @@ void runBluetoothMode(char cmd) {
       uint8_t leftCliff  = digitalRead(kPinLineSensorLeft);
       uint8_t rightCliff = digitalRead(kPinLineSensorRight);
       uint16_t dist = getDistanceCm();
-      if (leftCliff == 0 || rightCliff == 0 || gCliffFault || (dist > 0 && dist < 15)) {
+      if (edgeSeen(leftCliff, rightCliff) || (dist > 0 && dist < 15)) {
         haltMotors();
         gMotorActive = false;
         displayBitmap(kIconBrake);
@@ -1272,7 +1303,7 @@ void runLivingPetEngine() {
 
     if (lockTriggered) {
       // Explicit cliff check before handshake nod
-      if (digitalRead(kPinLineSensorLeft) == 0 || digitalRead(kPinLineSensorRight) == 0 || gCliffFault) {
+      if (edgeSeen(digitalRead(kPinLineSensorLeft), digitalRead(kPinLineSensorRight))) {
         haltMotors();
         gFollowLockAcquired = false;
         displayBitmap(kIconCliffGuard);
@@ -1316,7 +1347,7 @@ void runLivingPetEngine() {
       return;
     }
     // Explicit cliff check before moving
-    if (digitalRead(kPinLineSensorLeft) == 0 || digitalRead(kPinLineSensorRight) == 0 || gCliffFault) {
+    if (edgeSeen(digitalRead(kPinLineSensorLeft), digitalRead(kPinLineSensorRight))) {
       haltMotors(); gFollowLockAcquired = false; displayBitmap(kIconCliffGuard); return;
     }
 
@@ -1393,7 +1424,7 @@ void runLivingPetEngine() {
   // 7. Human Walking Away (32cm - 80cm -> Three-Sensor Fusion Arc-Drive Follow)
   else if (sonarHealthy && dist > kSweetSpotMax && dist <= kMaxLeashDist) {
     // Explicit cliff check immediately before forward leg
-    if (digitalRead(kPinLineSensorLeft) == 0 || digitalRead(kPinLineSensorRight) == 0 || gCliffFault) {
+    if (edgeSeen(digitalRead(kPinLineSensorLeft), digitalRead(kPinLineSensorRight))) {
       haltMotors();
       gFollowLockAcquired = false;
       displayBitmap(kIconCliffGuard);
@@ -1669,7 +1700,7 @@ void runFlashbangAmbushMode() {
   // 🛑 Cliff check before lunging
   uint8_t leftCliff  = digitalRead(kPinLineSensorLeft);
   uint8_t rightCliff = digitalRead(kPinLineSensorRight);
-  if (leftCliff == 0 || rightCliff == 0) {
+  if (edgeGuardActive() && (leftCliff == 0 || rightCliff == 0)) {
     haltMotors();
     return;
   }
