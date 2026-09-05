@@ -1195,6 +1195,7 @@
     }
 
     function stopMissionKeepalive() {
+      releaseMissionWakeLock();
       if (missionKeepaliveTimer) {
         clearInterval(missionKeepaliveTimer);
         missionKeepaliveTimer = null;
@@ -3071,8 +3072,26 @@
       if (patrolEl) patrolEl.innerText = `${mins}m ${secs}s`;
     }
 
+    // 🔆 Keep the screen awake while a mission runs. If the phone locks, the page hides,
+    // disarmAll() fires and the keepalive stops — the droid brakes within 1.5 s (correct,
+    // but it means "phone on the table" ends every mission). A screen wake lock is the
+    // honest fix: the deadman is untouched; the phone just stops falling asleep.
+    let missionWakeLock = null;
+    async function acquireMissionWakeLock() {
+      try {
+        if (!('wakeLock' in navigator) || missionWakeLock) return;
+        missionWakeLock = await navigator.wakeLock.request('screen');
+        missionWakeLock.addEventListener('release', () => { missionWakeLock = null; });
+      } catch (e) { missionWakeLock = null; } // unsupported or refused: nothing changes
+    }
+    function releaseMissionWakeLock() {
+      try { if (missionWakeLock) missionWakeLock.release(); } catch (e) {}
+      missionWakeLock = null;
+    }
+
     function startMissionKeepalive() {
       stopMissionKeepalive();
+      acquireMissionWakeLock();
       missionKeepaliveTimer = setInterval(() => {
         if (currentActiveMission && rxTxChar) {
           sendCommand('!');
