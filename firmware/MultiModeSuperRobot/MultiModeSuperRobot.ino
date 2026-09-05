@@ -287,14 +287,17 @@ const uint8_t PROGMEM kArrowBackward[8] = {
   0b11011011, 0b01111110, 0b00111100, 0b00011000
 };
 
+// The face is on the FRONT, so a person looking at it sees the robot's left on their
+// right. These arrows are drawn so that the viewer sees the arrow point the way the
+// robot actually moves in the room (dad's call, 5 Sep 2026 — they used to look reversed).
 const uint8_t PROGMEM kArrowLeft[8] = {
-  0b00010000, 0b00110000, 0b01110000, 0b11111111,
-  0b11111111, 0b01110000, 0b00110000, 0b00010000
+  0b00001000, 0b00001100, 0b00001110, 0b11111111,
+  0b11111111, 0b00001110, 0b00001100, 0b00001000
 };
 
 const uint8_t PROGMEM kArrowRight[8] = {
-  0b00001000, 0b00001100, 0b00001110, 0b11111111,
-  0b11111111, 0b00001110, 0b00001100, 0b00001000
+  0b00010000, 0b00110000, 0b01110000, 0b11111111,
+  0b11111111, 0b01110000, 0b00110000, 0b00010000
 };
 
 const uint8_t PROGMEM kIconBrake[8] = {
