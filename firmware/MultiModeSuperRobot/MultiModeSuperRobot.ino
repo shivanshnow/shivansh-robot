@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * MECHA OS 4.3 • S2-R2-D2 Autonomous Robotics Platform
+ * MECHA OS 4.3 • WALL-E Autonomous Robotics Platform
  * Universal Astromech Acoustic Intelligence & Multi-Mode Studio
  * ============================================================================
  * Target: Kidsbits Multi-Purpose Coding Robot (Model KD0003 / ATmega328P)
@@ -59,7 +59,8 @@ enum RobotMode {
   MODE_CLIFF_DETECTION    = 7,
   MODE_AIR_SYNTHESIZER    = 8,
   MODE_APEX_SENTRY        = 9,
-  MODE_COUNT              = 10
+  MODE_FOCUS_CLOCK        = 10, // Sitting-clock countdown; never drives motors
+  MODE_COUNT              = 11
 };
 
 enum SpeedGear {
@@ -138,6 +139,11 @@ uint16_t gDistanceHistory[5] = {20, 20, 20, 20, 20};
 uint8_t gHistoryIdx = 0;
 unsigned long gLastIdleChirpTime = 0;
 bool gFollowLockAcquired = false;
+
+// Focus Clock (mode 10): a real sitting clock that lives in the robot, not the phone.
+uint8_t gFocusMinutes = 25;
+unsigned long gFocusStartMs = 0;
+bool gFocusDone = false;
 
 // Phase 2: Three-Sensor Fusion State & Bearing Memory
 enum FollowBearing {
@@ -340,6 +346,9 @@ void chirpVisionLock();
 void chirpHappyPet();
 void chirpAlert();
 void chirpCurious();
+void chirpRandomR2();      // Never-the-same R2 sentence (3-6 glides, total <= 250ms)
+void chirpModeChange(uint8_t mode);
+void serviceChirpNB();     // Advances the non-blocking chirp one step per loop pass
 
 void haltMotors();
 void driveForward(uint8_t speed);
@@ -366,6 +375,8 @@ void runFlashbangAmbushMode();
 void runCliffDetectionMode();
 void runSpatialAirSynthesizer();
 void runApexSentryMode();
+void runFocusClockMode();
+void displayStaticClock(uint8_t hours, uint8_t minutes, bool showColon);
 
 // Special Protocols & Morse Academy
 void runTableSafeJoyGreeting();
@@ -455,9 +466,15 @@ void setup() {
   setMode(MODE_BLUETOOTH_RC);
   gLastIdleChirpTime = millis();
   gLastKeepaliveTime = millis();
+  // "Good morning" — the droid says hello on every power-up. Motors are stopped.
+  displayBitmap(kIconHeart);
+  chirpSweep(700, 1600, 110, 3);
+  chirpRandomR2();
+  displayBitmap(kIconBluetooth);
 }
 
 void loop() {
+  serviceChirpNB(); // advance any chirp that is playing while the wheels turn
   checkControlInput();
   executeCurrentMode();
 }
@@ -540,7 +557,18 @@ void setMode(RobotMode newMode) {
     case MODE_CLIFF_DETECTION:    displayBitmap(kIconCliffGuard); talkAstromech(EMOTION_CURIOUS); break;
     case MODE_AIR_SYNTHESIZER:    displayBitmap(kIconStandby); break;
     case MODE_APEX_SENTRY:        displayBitmap(kIconQuietSleep); break;
+    case MODE_FOCUS_CLOCK:
+      // The countdown starts the instant the mode is engaged and owns the face
+      // until another mode takes over. No motors, ever.
+      gFocusStartMs = millis();
+      gFocusDone = false;
+      displayBitmap(kIconStandby);
+      break;
   }
+
+  // R2-D2 mode-change voice: motors are already halted above, so a short
+  // blocking chirp here can never delay a stop.
+  chirpModeChange((uint8_t)newMode);
 }
 
 /* ============================================================================
@@ -738,6 +766,8 @@ void checkControlInput() {
       chirpVisionLock();
     }
     // 14. Real-time Variable Speed Throttle ('P' + digits) - NON-BLOCKING & DISCARD-SAFE
+    // This is the cockpit slider's opcode and NOTHING else: it never changes mode.
+    // The Focus Clock has its own framed opcode '^' below.
     else if (ch == 'P' || ch == 'p') {
       gLastKeepaliveTime = millis();
       int targetSpeed = 0;
@@ -857,7 +887,7 @@ void checkControlInput() {
       gLastKeepaliveTime = millis();
       uint16_t missionCount = 0;
       EEPROM.get(EEPROM_RUNS_ADDR, missionCount);
-      Serial.print(F("S2-R2-D2|GEAR:"));
+      Serial.print(F("WALL-E|GEAR:"));
       Serial.print(gCurrentGear);
       Serial.print(F("|MUTE:"));
       Serial.print(gMasterMute ? 1 : 0);
@@ -890,6 +920,28 @@ void checkControlInput() {
       if (n > 0) {
         if (modeBuf[0] == 'D' || modeBuf[0] == 'd') gDeskMode = true;
         else if (modeBuf[0] == 'F' || modeBuf[0] == 'f') gDeskMode = false;
+      }
+    }
+    // 25. Focus Clock ('^' + minutes + '\n', 1-99). Its own opcode, deliberately
+    // NOT the throttle 'P': a slow slider value must never be able to start a
+    // clock in the middle of a drive. Framed and drained to '\n' exactly like
+    // '~' and '%', so the digits can never leak back into the parser.
+    else if (ch == '^') {
+      gLastKeepaliveTime = millis();
+      char fBuf[6];
+      size_t n = readFramedPayload(fBuf, sizeof(fBuf));
+      if (n > 0) {
+        char* p = fBuf;
+        while (*p == ' ' || *p == '\t') p++;
+        if (isdigit(*p)) {
+          uint16_t mins = 0;
+          uint8_t digits = 0;
+          while (isdigit(*p) && digits < 2) { mins = mins * 10 + (*p - '0'); p++; digits++; }
+          if (mins >= 1 && mins <= 99) {
+            gFocusMinutes = (uint8_t)mins;
+            setMode(MODE_FOCUS_CLOCK);
+          }
+        }
       }
     }
     // 23. Echo Lab probe ('='): one ping, raw flight time in microseconds + the cm the
@@ -939,7 +991,10 @@ void checkControlInput() {
 
 void executeCurrentMode() {
   // 🛑 1. AUTONOMOUS DEADMAN: Evaluated on MODE ALONE, ungated by gMotorActive!
-  if (gCurrentMode != MODE_STANDBY && gCurrentMode != MODE_BLUETOOTH_RC) {
+  // MODE_FOCUS_CLOCK joins STANDBY and RC in the exemption: it never drives a
+  // motor, so it must survive the phone locking and the keepalive going quiet.
+  if (gCurrentMode != MODE_STANDBY && gCurrentMode != MODE_BLUETOOTH_RC &&
+      gCurrentMode != MODE_FOCUS_CLOCK) {
     if (millis() - gLastKeepaliveTime > 1500) {
       haltMotors();
       gMotorActive = false;
@@ -980,6 +1035,7 @@ void executeCurrentMode() {
     case MODE_CLIFF_DETECTION:    runCliffDetectionMode(); break;
     case MODE_AIR_SYNTHESIZER:    runSpatialAirSynthesizer(); break;
     case MODE_APEX_SENTRY:        runApexSentryMode(); break;
+    case MODE_FOCUS_CLOCK:        runFocusClockMode(); break;
   }
 }
 
@@ -999,8 +1055,9 @@ bool safeMotorDelay(unsigned long ms, bool checkCliff, bool checkSonar) {
       return false;
     }
 
-    // 2. Autonomous Keepalive Expiry Check
-    if (gCurrentMode != MODE_STANDBY && gCurrentMode != MODE_BLUETOOTH_RC) {
+    // 2. Autonomous Keepalive Expiry Check (same exemption set as executeCurrentMode)
+    if (gCurrentMode != MODE_STANDBY && gCurrentMode != MODE_BLUETOOTH_RC &&
+        gCurrentMode != MODE_FOCUS_CLOCK) {
       if (millis() - gLastKeepaliveTime > 1500) {
         haltMotors();
         gMotorActive = false;
@@ -1071,8 +1128,8 @@ void runObstacleMode() {
   uint16_t dist = getDistanceCm();
   if (Serial.available()) { haltMotors(); return; }
 
-  // FAIL-SAFE: If sensor wire is disconnected, timed out, or faulted, halt immediately!
-  if (gSonarFault || dist == 0) {
+  // FAIL-SAFE: a PROVEN electrical fault (stuck-HIGH echo pin) still halts.
+  if (gSonarFault) {
     haltMotors();
     displayBitmap(kIconBrake);
     if (millis() % 1200 < 60) talkAstromech(EMOTION_ALERT);
@@ -1080,10 +1137,21 @@ void runObstacleMode() {
     return;
   }
 
+  // 0. NOTHING AHEAD WITHIN RANGE (no echo). This is the middle of a big room,
+  // not a broken sensor: creep forward slowly and re-ping often. safeMotorDelay's
+  // sonar veto still fires the instant a real return under 18cm appears.
+  if (dist == 0) {
+    displayBitmap(kArrowForward);
+    driveForward(140); // deliberately slower than the 175 cruise
+    safeMotorDelay(20, true, true);
+    return;
+  }
+
   // 1. Close-Range Emergency Reflex (Enhanced 18cm cushion for thin chair legs!)
   if (dist > 0 && dist < 18) {
     haltMotors();
     talkAstromech(EMOTION_ALERT); // Startled reflex chirp!
+    chirpRandomR2();              // "turning away!" — wheels are stopped here
     driveBackward(kAutoDriveSpeed);
     if (!safeMotorDelay(280, false, false)) { haltMotors(); return; }
     haltMotors();
@@ -1095,6 +1163,7 @@ void runObstacleMode() {
   else if (dist > 0 && dist < 36) {
     haltMotors();
     talkDialogue(PHRASE_HESITATION); // Inquisitive "Hmm... checking path options"
+    chirpRandomR2();                 // "turning away!" — wheels are stopped here
     displayBitmap(kArrowLeft);
     pivotLeft(kAutoTurnSpeed);
     if (!safeMotorDelay(260, true, false)) { haltMotors(); return; }
@@ -1327,7 +1396,8 @@ void runLivingPetEngine() {
         return;
       }
       haltMotors();
-      talkAstromech(EMOTION_HAPPY);
+      chirpVisionLock();   // "I see you" — lock acquired
+      chirpRandomR2();
       lastLostTime = millis();
       lastChirpTrillTime = millis();
       lastValidDist = dist;
@@ -1622,8 +1692,10 @@ void runLivingPetEngine() {
       }
     } else if (millis() - lastLostTime >= 2500) {
       // 2.5s Auto-Timeout: Safe sleep disarm (reset handshake for next lock)
+      bool wasLocked = gFollowLockAcquired;
       gFollowLockAcquired = false;
       haltMotors();
+      if (wasLocked) chirpCurious(); // "where did you go?" — target lost, once
       digitalWrite(kPinStatusLed, (millis() / 400) % 2);
       safeMotorDelay(60, false, false);
     }
@@ -1692,6 +1764,62 @@ void runApexSentryMode() {
     stopAllAudio();
     delay(60);
   }
+}
+
+/**
+ * Mode 10: FOCUS CLOCK — a sitting clock that lives in the robot.
+ * The 28 pixels of the outer ring are the minutes. They go out one by one as the
+ * time is spent, and the centre dot blinks once a second so it reads as a clock.
+ * At zero it plays a short finish tune and holds a "done" face until the pilot
+ * chooses another mode. This mode NEVER drives a motor, which is why it is exempt
+ * from the 1500 ms autonomous keepalive: it must survive the phone locking.
+ */
+const uint8_t PROGMEM kFocusRing[28] = {
+  // packed (row << 3) | col, clockwise from the top-left corner
+  0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+  0x0F, 0x17, 0x1F, 0x27, 0x2F, 0x37, 0x3F,
+  0x3E, 0x3D, 0x3C, 0x3B, 0x3A, 0x39, 0x38,
+  0x30, 0x28, 0x20, 0x18, 0x10, 0x08
+};
+
+void runFocusClockMode() {
+  // Belt and braces: this mode never commands a motor, but if anything else left
+  // one running, the deadman path here kills it before anything else happens.
+  if (gMotorActive) haltMotors();
+
+  unsigned long elapsed = millis() - gFocusStartMs;
+  unsigned long total = (unsigned long)gFocusMinutes * 60000UL;
+
+  if (!gFocusDone && elapsed >= total) {
+    gFocusDone = true;
+    displayBitmap(kIconCrown);
+    // Motors are stopped in this mode, so a blocking finish tune is safe.
+    playTone(1046, 120); playTone(1318, 120);
+    playTone(1568, 120); playTone(2093, 260);
+    stopAllAudio();
+  }
+
+  if (gFocusDone) {
+    displayBitmap(kIconAffirmative);
+    digitalWrite(kPinStatusLed, (millis() / 500) % 2);
+    delay(40);
+    return;
+  }
+
+  uint8_t lit = (uint8_t)(((total - elapsed) * 28UL) / total);
+  uint8_t frame[8] = {0};
+  for (uint8_t i = 0; i < lit; i++) {
+    uint8_t rc = pgm_read_byte(&kFocusRing[i]);
+    frame[rc >> 3] |= (uint8_t)(1 << (7 - (rc & 0x07)));
+  }
+  // Centre dot: a one-second heartbeat so it reads as a clock, not a picture.
+  if ((elapsed / 500) % 2 == 0) {
+    frame[3] |= 0b00011000;
+    frame[4] |= 0b00011000;
+  }
+  displayCustomBuffer(frame);
+  digitalWrite(kPinStatusLed, ((elapsed / 500) % 2) ? HIGH : LOW);
+  delay(40);
 }
 
 void runFlashbangAmbushMode() {
@@ -2118,7 +2246,87 @@ void playTone(unsigned int freqHz, unsigned long durationMs) {
   noTone(kPinBuzzer1);
 }
 
+/* ---------------------------------------------------------------------------
+ * R2-D2 CHIRP ENGINE
+ * A chirp must never delay a stop. So: when the wheels are STOPPED a chirp may
+ * block (it is only tens of milliseconds); when the wheels are TURNING the same
+ * chirp is handed to a tiny millis() state machine that advances exactly one
+ * tone step per loop pass. Any stopAllAudio() — and every halt path calls it —
+ * cancels a chirp in flight instantly.
+ * ---------------------------------------------------------------------------
+ */
+#define NB_CHIRP_MAX 6
+static uint16_t gNbF0[NB_CHIRP_MAX];
+static uint16_t gNbF1[NB_CHIRP_MAX];
+static uint8_t  gNbDur[NB_CHIRP_MAX];
+static uint8_t  gNbCount = 0;
+static uint8_t  gNbIdx = 0;
+static unsigned long gNbStepStart = 0;
+static bool gNbActive = false;
+
 void stopAllAudio() {
+  gNbActive = false;
+  noTone(kPinBuzzer1);
+}
+
+void serviceChirpNB() {
+  if (!gNbActive) return;
+  if (gMasterMute) { gNbActive = false; noTone(kPinBuzzer1); return; }
+  unsigned long dt = millis() - gNbStepStart;
+  uint8_t d = gNbDur[gNbIdx];
+  if (dt >= d) {
+    gNbIdx++;
+    if (gNbIdx >= gNbCount) { gNbActive = false; noTone(kPinBuzzer1); return; }
+    gNbStepStart = millis();
+    tone(kPinBuzzer1, gNbF0[gNbIdx]);
+  } else if (dt >= (unsigned long)(d >> 1)) {
+    tone(kPinBuzzer1, gNbF1[gNbIdx]); // second half of the glide
+  }
+}
+
+// A random R2 sentence: 3-6 short glides, 30-80ms each, capped at 250ms total,
+// so no two ever sound the same.
+void chirpRandomR2() {
+  if (gMasterMute) return;
+  uint8_t want = random(3, 7);
+  uint16_t budget = 0;
+  gNbCount = 0;
+  for (uint8_t i = 0; i < want; i++) {
+    uint8_t dur = (uint8_t)random(30, 81);
+    if (budget + dur > 250) break;
+    gNbF0[gNbCount] = (uint16_t)random(600, 2601);
+    gNbF1[gNbCount] = (uint16_t)random(600, 2601);
+    gNbDur[gNbCount] = dur;
+    budget += dur;
+    gNbCount++;
+  }
+  if (gNbCount == 0) return;
+
+  if (gMotorActive) {
+    // Wheels turning: hand it to the non-blocking machine and return at once.
+    gNbIdx = 0;
+    gNbStepStart = millis();
+    gNbActive = true;
+    tone(kPinBuzzer1, gNbF0[0]);
+    return;
+  }
+
+  gNbActive = false;
+  for (uint8_t i = 0; i < gNbCount; i++) {
+    uint8_t d = gNbDur[i];
+    tone(kPinBuzzer1, gNbF0[i]); delay(d >> 1);
+    tone(kPinBuzzer1, gNbF1[i]); delay(d - (d >> 1));
+  }
+  noTone(kPinBuzzer1);
+}
+
+// One short, distinct two-note signature per mode (~70ms). Only ever called
+// from setMode(), which has already halted the motors.
+void chirpModeChange(uint8_t mode) {
+  if (gMasterMute) return;
+  unsigned int base = 700 + (unsigned int)mode * 130;
+  tone(kPinBuzzer1, base); delay(35);
+  tone(kPinBuzzer1, base + 400); delay(35);
   noTone(kPinBuzzer1);
 }
 
@@ -2664,16 +2872,15 @@ uint16_t getDistanceCm() {
 
   unsigned long duration = pulseIn(kPinUltrasonicEcho, HIGH, 25000); // 25ms max timeout (~4.2m)
   gLastEchoMicros = duration;
-  static uint8_t sonarConsecutiveZeroes = 0;
   if (duration == 0) {
-    sonarConsecutiveZeroes++;
-    if (sonarConsecutiveZeroes >= 8) {
-      gSonarFault = true; // 8 consecutive timeouts latches hardware fault
-    }
+    // A RUN OF TIMEOUTS IS NOT A FAULT. Facing an open room, "no echo inside
+    // 4.2 m" is the correct, healthy answer — it used to latch gSonarFault after
+    // 8 of them, which froze Scout in the middle of a big floor. The only
+    // electrical fault we can actually prove is the stuck-HIGH echo pin checked
+    // above. Return value is unchanged: 0 still means "cannot see".
     gSonarGoodCount = 0;
-    return 0; // "No echo" means no target in range: return 0
+    return 0;
   }
-  sonarConsecutiveZeroes = 0;
   gSonarGoodCount++;
   if (gSonarGoodCount >= 5) {
     gSonarFault = false; // Requires 5 consecutive valid readings to clear!
